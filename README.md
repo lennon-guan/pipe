@@ -51,5 +51,3 @@ You can invoke map/filter function many times
 			ToSlice().([]int)
 	// dst is []int{9, 36, 81}
 ```
-# TODO
-* add Reverse to Pipe

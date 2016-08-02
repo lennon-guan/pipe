@@ -3,17 +3,18 @@ package pipe
 import (
 	"fmt"
 	"reflect"
+	"sort"
 )
 
-type IProc interface{
+type IProc interface {
 	Next(reflect.Value) (reflect.Value, bool)
 	GetOutType() reflect.Type
 }
 
 type MapProc struct {
-	InType reflect.Type
+	InType  reflect.Type
 	OutType reflect.Type
-	Func reflect.Value
+	Func    reflect.Value
 }
 
 func NewMapProc(f interface{}) *MapProc {
@@ -25,10 +26,10 @@ func NewMapProc(f interface{}) *MapProc {
 	if fType.NumIn() != 1 || fType.NumOut() != 1 {
 		panic("map function must has only one input parameter and only one output parameter")
 	}
-	return &MapProc {
-		InType: fType.In(0),
+	return &MapProc{
+		InType:  fType.In(0),
 		OutType: fType.Out(0),
-		Func: fValue,
+		Func:    fValue,
 	}
 }
 
@@ -46,9 +47,9 @@ func (m *MapProc) GetOutType() reflect.Type {
 }
 
 type FilterProc struct {
-	InType reflect.Type
+	InType  reflect.Type
 	OutType reflect.Type
-	Func reflect.Value
+	Func    reflect.Value
 }
 
 func NewFilterProc(f interface{}) *FilterProc {
@@ -60,10 +61,10 @@ func NewFilterProc(f interface{}) *FilterProc {
 	if fType.NumIn() != 1 || fType.NumOut() != 1 || fType.Out(0).Kind() != reflect.Bool {
 		panic("filter function must has only one input parameter and only one boolean output parameter")
 	}
-	return &FilterProc {
-		InType: fType.In(0),
+	return &FilterProc{
+		InType:  fType.In(0),
 		OutType: fType.In(0),
-		Func: fValue,
+		Func:    fValue,
 	}
 }
 
@@ -82,32 +83,32 @@ func (f *FilterProc) GetOutType() reflect.Type {
 }
 
 type Pipe struct {
-	arr interface{}
+	arr     interface{}
 	srcPipe *Pipe
-	proc IProc
+	proc    IProc
 }
 
 func NewPipe(arr interface{}) *Pipe {
 	return &Pipe{
-		arr: arr,
+		arr:     arr,
 		srcPipe: nil,
-		proc: nil,
+		proc:    nil,
 	}
 }
 
 func (p *Pipe) Filter(proc interface{}) *Pipe {
-	return &Pipe {
-		arr: nil,
+	return &Pipe{
+		arr:     nil,
 		srcPipe: p,
-		proc: NewFilterProc(proc),
+		proc:    NewFilterProc(proc),
 	}
 }
 
 func (p *Pipe) Map(proc interface{}) *Pipe {
-	return &Pipe {
-		arr: nil,
+	return &Pipe{
+		arr:     nil,
 		srcPipe: p,
-		proc: NewMapProc(proc),
+		proc:    NewMapProc(proc),
 	}
 }
 
@@ -183,3 +184,72 @@ func (p *Pipe) Reduce(initValue interface{}, proc interface{}) interface{} {
 	return initValue
 }
 
+type _SortDelegate struct {
+	Arr      reflect.Value
+	lessFunc reflect.Value
+}
+
+func (s *_SortDelegate) Len() int {
+	return s.Arr.Len()
+}
+
+func (s *_SortDelegate) Less(i, j int) bool {
+	outs := s.lessFunc.Call([]reflect.Value{s.Arr.Index(i), s.Arr.Index(j)})
+	return outs[0].Interface().(bool)
+}
+
+func (s *_SortDelegate) Swap(i, j int) {
+	ti := s.Arr.Index(i).Interface()
+	tj := s.Arr.Index(j).Interface()
+	s.Arr.Index(i).Set(reflect.ValueOf(tj))
+	s.Arr.Index(j).Set(reflect.ValueOf(ti))
+}
+
+func (p *Pipe) Sort(less interface{}) *Pipe {
+	lessValue := reflect.ValueOf(less)
+	lessType := lessValue.Type()
+	var outElemType reflect.Type
+	if p.proc != nil {
+		outElemType = p.proc.GetOutType()
+	} else if p.arr != nil {
+		outElemType = reflect.TypeOf(p.arr).Elem()
+	} else {
+		panic("both proc and arr are nil")
+	}
+	if lessType.Kind() != reflect.Func || lessType.NumIn() != 2 ||
+		lessType.In(0) != outElemType || lessType.In(1) != outElemType ||
+		lessType.NumOut() != 1 || lessType.Out(0).Kind() != reflect.Bool {
+		panic("sort less function invalid")
+	}
+	delegate := &_SortDelegate{
+		Arr:      reflect.ValueOf(p.ToSlice()),
+		lessFunc: lessValue,
+	}
+	sort.Stable(delegate)
+	return &Pipe{
+		arr: delegate.Arr.Interface(),
+	}
+}
+
+func (p *Pipe) Reverse() *Pipe {
+	var outElemType reflect.Type
+	if p.proc != nil {
+		outElemType = p.proc.GetOutType()
+	} else if p.arr != nil {
+		outElemType = reflect.TypeOf(p.arr).Elem()
+	} else {
+		panic("both proc and arr are nil")
+	}
+	length := p.srcLen()
+	newSliceType := reflect.SliceOf(outElemType)
+	newSliceValue := reflect.MakeSlice(newSliceType, 0, length)
+	for i := length - 1; i >= 0; i-- {
+		itemValue, keep := p.getValue(i)
+		if keep {
+			newSliceValue = reflect.Append(newSliceValue, itemValue)
+		}
+	}
+	return &Pipe{
+		arr: newSliceValue.Interface(),
+	}
+}

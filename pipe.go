@@ -223,7 +223,41 @@ func (p *Pipe) ToMap(getKey, getVal interface{}) interface{} {
 		}
 	}
 	return newMapValue.Interface()
+}
 
+func (p *Pipe) ToGroupMap(getKey, getVal interface{}) interface{} {
+	getKeyValue := reflect.ValueOf(getKey)
+	getKeyType := getKeyValue.Type()
+	getValValue := reflect.ValueOf(getVal)
+	getValType := getValValue.Type()
+	outElemType := p.getOutType()
+	if !isGoodFunc(getKeyType, []interface{}{outElemType}, []interface{}{nil}) {
+		panic("getKey func invalid")
+	}
+	if !isGoodFunc(getValType, []interface{}{outElemType}, []interface{}{nil}) {
+		panic("getVal func invalid")
+	}
+	keyType := getKeyType.Out(0)
+	valType := getValType.Out(0)
+	sliceType := reflect.SliceOf(valType)
+	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, sliceType))
+	//zeroValue := reflect.Zero(sliceType)
+	length := p.srcLen()
+	for i := 0; i < length; i++ {
+		itemValue, keep := p.getValue(i)
+		if !keep {
+			continue
+		}
+		keyValue := getKeyValue.Call([]reflect.Value{itemValue})[0]
+		valValue := getValValue.Call([]reflect.Value{itemValue})[0]
+		slot := newMapValue.MapIndex(keyValue)
+		if !slot.IsValid() {
+			slot = reflect.MakeSlice(sliceType, 0, length-i)
+		}
+		slot = reflect.Append(slot, valValue)
+		newMapValue.SetMapIndex(keyValue, slot)
+	}
+	return newMapValue.Interface()
 }
 
 func (p *Pipe) Reduce(initValue interface{}, proc interface{}) interface{} {

@@ -9,6 +9,7 @@
 * output
   * ToSlice
   * ToMap
+  * ToGroupMap
   * Reduce
 
 ## Example
@@ -54,6 +55,21 @@
 			func(v int) string { return fmt.Sprintf("Val-%d", v) },
 		).(map[string]string)
 	// dst is map[Key-1:Val-1 Key-5:Val-5 Key-4:Val-4 Key-3:Val-3 Key-2:Val-2]
+```
+```go
+	src := []int{5, 4, 3, 2, 1}
+	dst := NewPipe(src).
+		ToGroupMap(
+		func(v int) string {
+			if v%2 != 0 {
+				return "odd"
+			} else {
+				return "even"
+			}
+		},
+		func(v int) int { return v },
+	).(map[string][]int)
+	// dst is map[odd:[5 3 1] even:[4 2]]
 ```
 You can invoke map/filter function many times
 ```go

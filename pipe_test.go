@@ -118,9 +118,9 @@ func TestToMap(t *testing.T) {
 	src := []int{5, 4, 3, 2, 1}
 	dst := NewPipe(src).
 		ToMap(
-			func(v int) string { return fmt.Sprintf("Key-%d", v) },
-			func(v int) string { return fmt.Sprintf("Val-%d", v) },
-		).(map[string]string)
+		func(v int) string { return fmt.Sprintf("Key-%d", v) },
+		func(v int) string { return fmt.Sprintf("Val-%d", v) },
+	).(map[string]string)
 	if len(dst) != 5 {
 		t.Error("to map fail. len not matched")
 	}
@@ -130,5 +130,29 @@ func TestToMap(t *testing.T) {
 		if dst[k] != v {
 			t.Error("value wrong")
 		}
+	}
+}
+
+func TestToGroupMap(t *testing.T) {
+	src := []int{5, 4, 3, 2, 1}
+	dst := NewPipe(src).
+		ToGroupMap(
+		func(v int) string {
+			if v%2 != 0 {
+				return "odd"
+			} else {
+				return "even"
+			}
+		},
+		func(v int) int { return v },
+	).(map[string][]int)
+	if len(dst) != 2 {
+		t.Error("to groupmap fail. len not matched")
+	}
+	if !intSliceEqual(dst["odd"], []int{5, 3, 1}) {
+		t.Error("to groupmap fail.")
+	}
+	if !intSliceEqual(dst["even"], []int{4, 2}) {
+		t.Error("to groupmap fail.")
 	}
 }

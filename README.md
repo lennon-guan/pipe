@@ -1,11 +1,15 @@
 # A golang library that makes operations on slice easilier
 
 ## What can I do?
-* map
-* filter
-* reduce
-* sort
-* reverse
+* data process
+  * Map
+  * Filter
+  * Sort
+  * Reverse
+* output
+  * ToSlice
+  * ToMap
+  * Reduce
 
 ## Example
 ```go
@@ -41,6 +45,15 @@
 		Reverse().
 		ToSlice().([]int)
 	// dst is []int{3, 2, 1}
+```
+```go
+	src := []int{5, 4, 3, 2, 1}
+	dst := NewPipe(src).
+		ToMap(
+			func(v int) string { return fmt.Sprintf("Key-%d", v) },
+			func(v int) string { return fmt.Sprintf("Val-%d", v) },
+		).(map[string]string)
+	// dst is map[Key-1:Val-1 Key-5:Val-5 Key-4:Val-4 Key-3:Val-3 Key-2:Val-2]
 ```
 You can invoke map/filter function many times
 ```go

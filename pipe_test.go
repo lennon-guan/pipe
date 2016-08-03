@@ -113,3 +113,22 @@ func TestReverse(t *testing.T) {
 		t.Error(fmt.Sprintf("sort fail %v", dst))
 	}
 }
+
+func TestToMap(t *testing.T) {
+	src := []int{5, 4, 3, 2, 1}
+	dst := NewPipe(src).
+		ToMap(
+			func(v int) string { return fmt.Sprintf("Key-%d", v) },
+			func(v int) string { return fmt.Sprintf("Val-%d", v) },
+		).(map[string]string)
+	if len(dst) != 5 {
+		t.Error("to map fail. len not matched")
+	}
+	for i := 1; i <= 5; i++ {
+		k := fmt.Sprintf("Key-%d", i)
+		v := fmt.Sprintf("Val-%d", i)
+		if dst[k] != v {
+			t.Error("value wrong")
+		}
+	}
+}

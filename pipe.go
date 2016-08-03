@@ -17,13 +17,47 @@ type MapProc struct {
 	Func    reflect.Value
 }
 
+func isGoodFunc(fType reflect.Type, intypes, outtypes []interface{}) bool {
+	if fType.Kind() != reflect.Func {
+		return false
+	}
+	if fType.NumIn() != len(intypes) {
+		return false
+	}
+	for i, t := range intypes {
+		argType := fType.In(i)
+		if t == nil {
+			continue
+		}
+		if tt, ok := t.(reflect.Type); ok && tt != argType {
+			return false
+		}
+		if tk, ok := t.(reflect.Kind); ok && tk != argType.Kind() {
+			return false
+		}
+	}
+	if fType.NumOut() != len(outtypes) {
+		return false
+	}
+	for i, t := range outtypes {
+		argType := fType.Out(i)
+		if t == nil {
+			continue
+		}
+		if tt, ok := t.(reflect.Type); ok && tt != argType {
+			return false
+		}
+		if tk, ok := t.(reflect.Kind); ok && tk != argType.Kind() {
+			return false
+		}
+	}
+	return true
+}
+
 func NewMapProc(f interface{}) *MapProc {
 	fType := reflect.TypeOf(f)
 	fValue := reflect.ValueOf(f)
-	if fType.Kind() != reflect.Func {
-		panic("map argument must be a function")
-	}
-	if fType.NumIn() != 1 || fType.NumOut() != 1 {
+	if !isGoodFunc(fType, []interface{}{nil}, []interface{}{nil}) {
 		panic("map function must has only one input parameter and only one output parameter")
 	}
 	return &MapProc{
@@ -55,10 +89,7 @@ type FilterProc struct {
 func NewFilterProc(f interface{}) *FilterProc {
 	fType := reflect.TypeOf(f)
 	fValue := reflect.ValueOf(f)
-	if fType.Kind() != reflect.Func {
-		panic("filter argument must be a function")
-	}
-	if fType.NumIn() != 1 || fType.NumOut() != 1 || fType.Out(0).Kind() != reflect.Bool {
+	if !isGoodFunc(fType, []interface{}{nil}, []interface{}{reflect.Bool}) {
 		panic("filter function must has only one input parameter and only one boolean output parameter")
 	}
 	return &FilterProc{
@@ -139,12 +170,22 @@ func (p *Pipe) getValue(index int) (item reflect.Value, keep bool) {
 	return
 }
 
+func (p *Pipe) getOutType() reflect.Type {
+	if p.proc != nil {
+		return p.proc.GetOutType()
+	} else if p.arr != nil {
+		return reflect.TypeOf(p.arr).Elem()
+	} else {
+		panic("both proc and arr are nil")
+	}
+}
+
 func (p *Pipe) ToSlice() interface{} {
 	if p.proc == nil {
 		return p.arr
 	}
 	length := p.srcLen()
-	outElemType := p.proc.GetOutType()
+	outElemType := p.getOutType()
 	newSliceType := reflect.SliceOf(outElemType)
 	newSliceValue := reflect.MakeSlice(newSliceType, 0, length)
 	for i := 0; i < length; i++ {
@@ -156,22 +197,42 @@ func (p *Pipe) ToSlice() interface{} {
 	return newSliceValue.Interface()
 }
 
+func (p *Pipe) ToMap(getKey, getVal interface{}) interface{} {
+	getKeyValue := reflect.ValueOf(getKey)
+	getKeyType := getKeyValue.Type()
+	getValValue := reflect.ValueOf(getVal)
+	getValType := getValValue.Type()
+	outElemType := p.getOutType()
+	if !isGoodFunc(getKeyType, []interface{}{outElemType}, []interface{}{nil}) {
+		panic("getKey func invalid")
+	}
+	if !isGoodFunc(getValType, []interface{}{outElemType}, []interface{}{nil}) {
+		panic("getVal func invalid")
+	}
+	keyType := getKeyType.Out(0)
+	valType := getValType.Out(0)
+	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, valType))
+	length := p.srcLen()
+	for i := 0; i < length; i++ {
+		itemValue, keep := p.getValue(i)
+		if keep {
+			newMapValue.SetMapIndex(
+				getKeyValue.Call([]reflect.Value{itemValue})[0],
+				getValValue.Call([]reflect.Value{itemValue})[0],
+			)
+		}
+	}
+	return newMapValue.Interface()
+
+}
+
 func (p *Pipe) Reduce(initValue interface{}, proc interface{}) interface{} {
 	length := p.srcLen()
-	var outElemType reflect.Type
-	if p.proc != nil {
-		outElemType = p.proc.GetOutType()
-	} else if p.arr != nil {
-		outElemType = reflect.TypeOf(p.arr).Elem()
-	} else {
-		panic("both proc and arr are nil")
-	}
+	outElemType := p.getOutType()
 	procValue := reflect.ValueOf(proc)
 	procType := procValue.Type()
 	initType := reflect.TypeOf(initValue)
-	if procType.Kind() != reflect.Func || procType.NumIn() != 2 ||
-		procType.In(0) != reflect.TypeOf(initValue) || procType.In(1) != outElemType ||
-		procType.NumOut() != 1 || procType.Out(0) != initType {
+	if !isGoodFunc(procType, []interface{}{initType, outElemType}, []interface{}{initType}) {
 		panic("reduce function invalid")
 	}
 	for i := 0; i < length; i++ {
@@ -208,17 +269,8 @@ func (s *_SortDelegate) Swap(i, j int) {
 func (p *Pipe) Sort(less interface{}) *Pipe {
 	lessValue := reflect.ValueOf(less)
 	lessType := lessValue.Type()
-	var outElemType reflect.Type
-	if p.proc != nil {
-		outElemType = p.proc.GetOutType()
-	} else if p.arr != nil {
-		outElemType = reflect.TypeOf(p.arr).Elem()
-	} else {
-		panic("both proc and arr are nil")
-	}
-	if lessType.Kind() != reflect.Func || lessType.NumIn() != 2 ||
-		lessType.In(0) != outElemType || lessType.In(1) != outElemType ||
-		lessType.NumOut() != 1 || lessType.Out(0).Kind() != reflect.Bool {
+	outElemType := p.getOutType()
+	if !isGoodFunc(lessType, []interface{}{outElemType, outElemType}, []interface{}{reflect.Bool}) {
 		panic("sort less function invalid")
 	}
 	delegate := &_SortDelegate{
@@ -232,14 +284,7 @@ func (p *Pipe) Sort(less interface{}) *Pipe {
 }
 
 func (p *Pipe) Reverse() *Pipe {
-	var outElemType reflect.Type
-	if p.proc != nil {
-		outElemType = p.proc.GetOutType()
-	} else if p.arr != nil {
-		outElemType = reflect.TypeOf(p.arr).Elem()
-	} else {
-		panic("both proc and arr are nil")
-	}
+	outElemType := p.getOutType()
 	length := p.srcLen()
 	newSliceType := reflect.SliceOf(outElemType)
 	newSliceValue := reflect.MakeSlice(newSliceType, 0, length)

@@ -34,21 +34,21 @@
 ```
 ```go
 	src := []int{3, 1, 4, 1, 5, 9}
-	dst := NewPipe(src).
+	dst := pipe.NewPipe(src).
 		Sort(func(a, b int) bool { return a < b }).
 		ToSlice().([]int)
 	// dst is []int{1, 1, 3, 4, 5, 9}
 ```
 ```go
 	src := []int{1, 2, 3}
-	dst := NewPipe(src).
+	dst := pipe.NewPipe(src).
 		Reverse().
 		ToSlice().([]int)
 	// dst is []int{3, 2, 1}
 ```
 ```go
 	src := []int{5, 4, 3, 2, 1}
-	dst := NewPipe(src).
+	dst := pipe.NewPipe(src).
 		ToMap(
 			func(v int) string { return fmt.Sprintf("Key-%d", v) },
 			func(v int) string { return fmt.Sprintf("Val-%d", v) },

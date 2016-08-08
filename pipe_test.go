@@ -39,11 +39,21 @@ func TestMap(t *testing.T) {
 	}
 }
 
+func TestMap2(t *testing.T) {
+	src := []int{1, 2, 3}
+	dst := NewPipe(src).
+		Map(nil).
+		ToSlice().([]int)
+	if !intSliceEqual(dst, 1, 2, 3) {
+		t.Error(fmt.Sprintf("wrong dst %v", dst))
+	}
+}
+
 type User struct {
 	UserId int
 }
 
-func TestMap2(t *testing.T) {
+func TestMap3(t *testing.T) {
 	src := []User{User{UserId: 1}, User{UserId: 2}}
 	dst := NewPipe(src).
 		Map(func(item User) int { return item.UserId }).
@@ -148,6 +158,24 @@ func TestToMap(t *testing.T) {
 	}
 }
 
+func TestToMapNil(t *testing.T) {
+	src := []int{5, 4, 3, 2, 1}
+	dst := NewPipe(src).
+		ToMap(
+		func(v int) string { return fmt.Sprintf("Key-%d", v) },
+		nil,
+	).(map[string]int)
+	if len(dst) != 5 {
+		t.Error("to map fail. len not matched")
+	}
+	for i := 1; i <= 5; i++ {
+		k := fmt.Sprintf("Key-%d", i)
+		if dst[k] != i {
+			t.Error("value wrong")
+		}
+	}
+}
+
 func TestToMap2(t *testing.T) {
 	src := []int{5, 4, 3, 2, 1}
 	dst := NewPipe(src).
@@ -178,6 +206,30 @@ func TestToGroupMap(t *testing.T) {
 			}
 		},
 		func(v int) int { return v },
+	).(map[string][]int)
+	if len(dst) != 2 {
+		t.Error("to groupmap fail. len not matched")
+	}
+	if !intSliceEqual(dst["odd"], 5, 3, 1) {
+		t.Error("to groupmap fail.")
+	}
+	if !intSliceEqual(dst["even"], 4, 2) {
+		t.Error("to groupmap fail.")
+	}
+}
+
+func TestToGroupMapNil(t *testing.T) {
+	src := []int{5, 4, 3, 2, 1}
+	dst := NewPipe(src).
+		ToGroupMap(
+		func(v int) string {
+			if v%2 != 0 {
+				return "odd"
+			} else {
+				return "even"
+			}
+		},
+		nil,
 	).(map[string][]int)
 	if len(dst) != 2 {
 		t.Error("to groupmap fail. len not matched")

@@ -54,16 +54,28 @@ func isGoodFunc(fType reflect.Type, intypes, outtypes []interface{}) bool {
 	return true
 }
 
-func NewMapProc(f interface{}) *MapProc {
-	fType := reflect.TypeOf(f)
+func noop(input reflect.Value) reflect.Value {
+	return input
+}
+
+func newMapProc(f interface{}, intype reflect.Type) *MapProc {
 	fValue := reflect.ValueOf(f)
-	if !isGoodFunc(fType, []interface{}{nil}, []interface{}{nil}) {
-		panic("map function must has only one input parameter and only one output parameter")
-	}
-	return &MapProc{
-		InType:  fType.In(0),
-		OutType: fType.Out(0),
-		Func:    fValue,
+	if !fValue.IsValid() {
+		return &MapProc{
+			InType:  intype,
+			OutType: intype,
+			Func:    fValue,
+		}
+	} else {
+		fType := fValue.Type()
+		if !isGoodFunc(fType, []interface{}{nil}, []interface{}{nil}) {
+			panic("map function must has only one input parameter and only one output parameter")
+		}
+		return &MapProc{
+			InType:  fType.In(0),
+			OutType: fType.Out(0),
+			Func:    fValue,
+		}
 	}
 }
 
@@ -72,8 +84,12 @@ func (m *MapProc) Next(input reflect.Value) (reflect.Value, bool) {
 	if inType != m.InType {
 		panic(fmt.Sprintf("input type error. want %v got %v", m.InType, inType))
 	}
-	outs := m.Func.Call([]reflect.Value{input})
-	return outs[0], true
+	if m.Func.IsValid() {
+		outs := m.Func.Call([]reflect.Value{input})
+		return outs[0], true
+	} else {
+		return input, true
+	}
 }
 
 func (m *MapProc) GetOutType() reflect.Type {
@@ -139,7 +155,7 @@ func (p *Pipe) Map(proc interface{}) *Pipe {
 	return &Pipe{
 		arr:     nil,
 		srcPipe: p,
-		proc:    NewMapProc(proc),
+		proc:    newMapProc(proc, p.getOutType()),
 	}
 }
 
@@ -198,28 +214,43 @@ func (p *Pipe) ToSlice() interface{} {
 }
 
 func (p *Pipe) ToMap(getKey, getVal interface{}) interface{} {
-	getKeyValue := reflect.ValueOf(getKey)
-	getKeyType := getKeyValue.Type()
-	getValValue := reflect.ValueOf(getVal)
-	getValType := getValValue.Type()
 	outElemType := p.getOutType()
-	if !isGoodFunc(getKeyType, []interface{}{outElemType}, []interface{}{nil}) {
-		panic("getKey func invalid")
+	var keyType, valType reflect.Type
+	getKeyValue := reflect.ValueOf(getKey)
+	var realGetKey, realGetVal func(reflect.Value) reflect.Value
+	if getKeyValue.IsValid() {
+		getKeyType := getKeyValue.Type()
+		if !isGoodFunc(getKeyType, []interface{}{outElemType}, []interface{}{nil}) {
+			panic("getKey func invalid")
+		}
+		keyType = getKeyType.Out(0)
+		realGetKey = func(input reflect.Value) reflect.Value {
+			return getKeyValue.Call([]reflect.Value{input})[0]
+		}
+	} else {
+		keyType = outElemType
+		realGetVal = noop
 	}
-	if !isGoodFunc(getValType, []interface{}{outElemType}, []interface{}{nil}) {
-		panic("getVal func invalid")
+	getValValue := reflect.ValueOf(getVal)
+	if getValValue.IsValid() {
+		getValType := getValValue.Type()
+		if !isGoodFunc(getValType, []interface{}{outElemType}, []interface{}{nil}) {
+			panic("getVal func invalid")
+		}
+		valType = getValType.Out(0)
+		realGetVal = func(input reflect.Value) reflect.Value {
+			return getValValue.Call([]reflect.Value{input})[0]
+		}
+	} else {
+		valType = outElemType
+		realGetVal = noop
 	}
-	keyType := getKeyType.Out(0)
-	valType := getValType.Out(0)
 	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, valType))
 	length := p.srcLen()
 	for i := 0; i < length; i++ {
 		itemValue, keep := p.getValue(i)
 		if keep {
-			newMapValue.SetMapIndex(
-				getKeyValue.Call([]reflect.Value{itemValue})[0],
-				getValValue.Call([]reflect.Value{itemValue})[0],
-			)
+			newMapValue.SetMapIndex(realGetKey(itemValue), realGetVal(itemValue))
 		}
 	}
 	return newMapValue.Interface()
@@ -247,19 +278,37 @@ func (p *Pipe) ToMap2(getPair interface{}) interface{} {
 }
 
 func (p *Pipe) ToGroupMap(getKey, getVal interface{}) interface{} {
-	getKeyValue := reflect.ValueOf(getKey)
-	getKeyType := getKeyValue.Type()
-	getValValue := reflect.ValueOf(getVal)
-	getValType := getValValue.Type()
 	outElemType := p.getOutType()
-	if !isGoodFunc(getKeyType, []interface{}{outElemType}, []interface{}{nil}) {
-		panic("getKey func invalid")
+	var keyType, valType reflect.Type
+	getKeyValue := reflect.ValueOf(getKey)
+	var realGetKey, realGetVal func(reflect.Value) reflect.Value
+	if getKeyValue.IsValid() {
+		getKeyType := getKeyValue.Type()
+		if !isGoodFunc(getKeyType, []interface{}{outElemType}, []interface{}{nil}) {
+			panic("getKey func invalid")
+		}
+		keyType = getKeyType.Out(0)
+		realGetKey = func(input reflect.Value) reflect.Value {
+			return getKeyValue.Call([]reflect.Value{input})[0]
+		}
+	} else {
+		keyType = outElemType
+		realGetVal = noop
 	}
-	if !isGoodFunc(getValType, []interface{}{outElemType}, []interface{}{nil}) {
-		panic("getVal func invalid")
+	getValValue := reflect.ValueOf(getVal)
+	if getValValue.IsValid() {
+		getValType := getValValue.Type()
+		if !isGoodFunc(getValType, []interface{}{outElemType}, []interface{}{nil}) {
+			panic("getVal func invalid")
+		}
+		valType = getValType.Out(0)
+		realGetVal = func(input reflect.Value) reflect.Value {
+			return getValValue.Call([]reflect.Value{input})[0]
+		}
+	} else {
+		valType = outElemType
+		realGetVal = noop
 	}
-	keyType := getKeyType.Out(0)
-	valType := getValType.Out(0)
 	sliceType := reflect.SliceOf(valType)
 	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, sliceType))
 	length := p.srcLen()
@@ -268,8 +317,8 @@ func (p *Pipe) ToGroupMap(getKey, getVal interface{}) interface{} {
 		if !keep {
 			continue
 		}
-		keyValue := getKeyValue.Call([]reflect.Value{itemValue})[0]
-		valValue := getValValue.Call([]reflect.Value{itemValue})[0]
+		keyValue := realGetKey(itemValue)
+		valValue := realGetVal(itemValue)
 		slot := newMapValue.MapIndex(keyValue)
 		if !slot.IsValid() {
 			slot = reflect.MakeSlice(sliceType, 0, length-i)

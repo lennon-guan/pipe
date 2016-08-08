@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func intSliceEqual(a, b []int) bool {
+func intSliceEqual(a []int, b ...int) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -17,7 +17,7 @@ func intSliceEqual(a, b []int) bool {
 	return true
 }
 
-func strSliceEqual(a, b []string) bool {
+func strSliceEqual(a []string, b ...string) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -34,7 +34,22 @@ func TestMap(t *testing.T) {
 	dst := NewPipe(src).
 		Map(func(item int) string { return fmt.Sprintf("#%d", item) }).
 		ToSlice().([]string)
-	if !strSliceEqual(dst, []string{"#1", "#2", "#3"}) {
+	if !strSliceEqual(dst, "#1", "#2", "#3") {
+		t.Error(fmt.Sprintf("wrong dst %v", dst))
+	}
+}
+
+type User struct {
+	UserId int
+}
+
+func TestMap2(t *testing.T) {
+	src := []User{User{UserId: 1}, User{UserId: 2}}
+	dst := NewPipe(src).
+		Map(func(item User) int { return item.UserId }).
+		ToSlice().([]int)
+	fmt.Println(dst)
+	if !intSliceEqual(dst, 1, 2) {
 		t.Error(fmt.Sprintf("wrong dst %v", dst))
 	}
 }
@@ -44,7 +59,7 @@ func TestFilter(t *testing.T) {
 	dst := NewPipe(src).
 		Filter(func(in int) bool { return in%3 == 0 }).
 		ToSlice().([]int)
-	if !intSliceEqual(dst, []int{3, 6, 9}) {
+	if !intSliceEqual(dst, 3, 6, 9) {
 		t.Error(fmt.Sprintf("wrong dst %v", dst))
 	}
 }
@@ -64,7 +79,7 @@ func TestMapFilterToSlice(t *testing.T) {
 		Filter(func(in int) bool { return in%3 == 0 }).
 		Map(func(in int) int { return in * in }).
 		ToSlice().([]int)
-	if !intSliceEqual(dst, []int{9, 36, 81}) {
+	if !intSliceEqual(dst, 9, 36, 81) {
 		t.Error(fmt.Sprintf("wrong dst %v", dst))
 	}
 }
@@ -85,7 +100,7 @@ func TestSort(t *testing.T) {
 	dst := NewPipe(src).
 		Sort(func(a, b int) bool { return a < b }).
 		ToSlice().([]int)
-	if !intSliceEqual(dst, []int{1, 1, 3, 4, 5, 9}) {
+	if !intSliceEqual(dst, 1, 1, 3, 4, 5, 9) {
 		t.Error(fmt.Sprintf("sort fail %v", dst))
 	}
 }
@@ -97,7 +112,7 @@ func TestSortMapFilter(t *testing.T) {
 		Sort(func(a, b int) bool { return a < b }).
 		Map(func(i int) int { return i * i }).
 		ToSlice().([]int)
-	if !intSliceEqual(dst, []int{1, 9, 25}) {
+	if !intSliceEqual(dst, 1, 9, 25) {
 		t.Error(fmt.Sprintf("sort fail %v", dst))
 	}
 }
@@ -109,7 +124,7 @@ func TestReverse(t *testing.T) {
 		Filter(func(v int) bool { return v < 5 }).
 		Reverse().
 		ToSlice().([]int)
-	if !intSliceEqual(dst, []int{2, 3, 4}) {
+	if !intSliceEqual(dst, 2, 3, 4) {
 		t.Error(fmt.Sprintf("sort fail %v", dst))
 	}
 }
@@ -149,10 +164,36 @@ func TestToGroupMap(t *testing.T) {
 	if len(dst) != 2 {
 		t.Error("to groupmap fail. len not matched")
 	}
-	if !intSliceEqual(dst["odd"], []int{5, 3, 1}) {
+	if !intSliceEqual(dst["odd"], 5, 3, 1) {
 		t.Error("to groupmap fail.")
 	}
-	if !intSliceEqual(dst["even"], []int{4, 2}) {
+	if !intSliceEqual(dst["even"], 4, 2) {
 		t.Error("to groupmap fail.")
+	}
+}
+
+func TestMapPipeKeys(t *testing.T) {
+	src := map[string]int{
+		"Andy":  91,
+		"Bob":   87,
+		"Clark": 95,
+	}
+	dst := NewMapPipe(src).Keys().Sort(func(a, b string) bool { return a < b }).
+		ToSlice().([]string)
+	if !strSliceEqual(dst, "Andy", "Bob", "Clark") {
+		t.Error("keys wrong")
+	}
+}
+
+func TestMapPipeValues(t *testing.T) {
+	src := map[string]int{
+		"Andy":  91,
+		"Bob":   87,
+		"Clark": 95,
+	}
+	dst := NewMapPipe(src).Values().Sort(func(a, b int) bool { return a < b }).
+		ToSlice().([]int)
+	if !intSliceEqual(dst, 87, 91, 95) {
+		t.Error("values wrong")
 	}
 }

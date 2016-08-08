@@ -12,6 +12,10 @@
   * ToGroupMap
   * Reduce
 
+## Installation
+```
+go get github.com/lennon-guan/pipe
+```
 ## Example
 ```go
 	src := []int{1, 2, 3}

@@ -4,26 +4,26 @@ import (
 	"reflect"
 )
 
-type MapPipe struct {
+type _MapPipe struct {
 	m interface{}
 	t reflect.Type
 	v reflect.Value
 }
 
-func NewMapPipe(m interface{}) *MapPipe {
+func NewMapPipe(m interface{}) *_MapPipe {
 	mValue := reflect.ValueOf(m)
 	mType := mValue.Type()
 	if mType.Kind() != reflect.Map {
 		panic("NewMapPipe only accept map param")
 	}
-	return &MapPipe{
+	return &_MapPipe{
 		m: m,
 		v: mValue,
 		t: mType,
 	}
 }
 
-func (mp *MapPipe) Keys() *Pipe {
+func (mp *_MapPipe) Keys() *_Pipe {
 	elType := mp.t.Key()
 	sliceType := reflect.SliceOf(elType)
 	keysValue := mp.v.MapKeys()
@@ -35,7 +35,7 @@ func (mp *MapPipe) Keys() *Pipe {
 	return NewPipe(newSliceValue.Interface())
 }
 
-func (mp *MapPipe) Values() *Pipe {
+func (mp *_MapPipe) Values() *_Pipe {
 	elType := mp.t.Elem()
 	sliceType := reflect.SliceOf(elType)
 	keysValue := mp.v.MapKeys()

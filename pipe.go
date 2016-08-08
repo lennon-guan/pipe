@@ -6,12 +6,12 @@ import (
 	"sort"
 )
 
-type IProc interface {
+type _IProc interface {
 	Next(reflect.Value) (reflect.Value, bool)
 	GetOutType() reflect.Type
 }
 
-type MapProc struct {
+type _MapProc struct {
 	InType  reflect.Type
 	OutType reflect.Type
 	Func    reflect.Value
@@ -58,10 +58,10 @@ func noop(input reflect.Value) reflect.Value {
 	return input
 }
 
-func newMapProc(f interface{}, intype reflect.Type) *MapProc {
+func newMapProc(f interface{}, intype reflect.Type) *_MapProc {
 	fValue := reflect.ValueOf(f)
 	if !fValue.IsValid() {
-		return &MapProc{
+		return &_MapProc{
 			InType:  intype,
 			OutType: intype,
 			Func:    fValue,
@@ -71,7 +71,7 @@ func newMapProc(f interface{}, intype reflect.Type) *MapProc {
 		if !isGoodFunc(fType, []interface{}{nil}, []interface{}{nil}) {
 			panic("map function must has only one input parameter and only one output parameter")
 		}
-		return &MapProc{
+		return &_MapProc{
 			InType:  fType.In(0),
 			OutType: fType.Out(0),
 			Func:    fValue,
@@ -79,7 +79,7 @@ func newMapProc(f interface{}, intype reflect.Type) *MapProc {
 	}
 }
 
-func (m *MapProc) Next(input reflect.Value) (reflect.Value, bool) {
+func (m *_MapProc) Next(input reflect.Value) (reflect.Value, bool) {
 	inType := input.Type()
 	if inType != m.InType {
 		panic(fmt.Sprintf("input type error. want %v got %v", m.InType, inType))
@@ -92,30 +92,30 @@ func (m *MapProc) Next(input reflect.Value) (reflect.Value, bool) {
 	}
 }
 
-func (m *MapProc) GetOutType() reflect.Type {
+func (m *_MapProc) GetOutType() reflect.Type {
 	return m.OutType
 }
 
-type FilterProc struct {
+type _FilterProc struct {
 	InType  reflect.Type
 	OutType reflect.Type
 	Func    reflect.Value
 }
 
-func NewFilterProc(f interface{}) *FilterProc {
+func newFilterProc(f interface{}) *_FilterProc {
 	fType := reflect.TypeOf(f)
 	fValue := reflect.ValueOf(f)
 	if !isGoodFunc(fType, []interface{}{nil}, []interface{}{reflect.Bool}) {
 		panic("filter function must has only one input parameter and only one boolean output parameter")
 	}
-	return &FilterProc{
+	return &_FilterProc{
 		InType:  fType.In(0),
 		OutType: fType.In(0),
 		Func:    fValue,
 	}
 }
 
-func (f *FilterProc) Next(input reflect.Value) (reflect.Value, bool) {
+func (f *_FilterProc) Next(input reflect.Value) (reflect.Value, bool) {
 	inType := input.Type()
 	if inType != f.InType {
 		panic(fmt.Sprintf("input type error. want %v got %v", f.InType, inType))
@@ -125,41 +125,41 @@ func (f *FilterProc) Next(input reflect.Value) (reflect.Value, bool) {
 	return input, passed
 }
 
-func (f *FilterProc) GetOutType() reflect.Type {
+func (f *_FilterProc) GetOutType() reflect.Type {
 	return f.OutType
 }
 
-type Pipe struct {
+type _Pipe struct {
 	arr     interface{}
-	srcPipe *Pipe
-	proc    IProc
+	srcPipe *_Pipe
+	proc    _IProc
 }
 
-func NewPipe(arr interface{}) *Pipe {
-	return &Pipe{
+func NewPipe(arr interface{}) *_Pipe {
+	return &_Pipe{
 		arr:     arr,
 		srcPipe: nil,
 		proc:    nil,
 	}
 }
 
-func (p *Pipe) Filter(proc interface{}) *Pipe {
-	return &Pipe{
+func (p *_Pipe) Filter(proc interface{}) *_Pipe {
+	return &_Pipe{
 		arr:     nil,
 		srcPipe: p,
-		proc:    NewFilterProc(proc),
+		proc:    newFilterProc(proc),
 	}
 }
 
-func (p *Pipe) Map(proc interface{}) *Pipe {
-	return &Pipe{
+func (p *_Pipe) Map(proc interface{}) *_Pipe {
+	return &_Pipe{
 		arr:     nil,
 		srcPipe: p,
 		proc:    newMapProc(proc, p.getOutType()),
 	}
 }
 
-func (p *Pipe) srcLen() int {
+func (p *_Pipe) srcLen() int {
 	pp := p
 	for pp.srcPipe != nil {
 		pp = pp.srcPipe
@@ -170,7 +170,7 @@ func (p *Pipe) srcLen() int {
 	return reflect.ValueOf(pp.arr).Len()
 }
 
-func (p *Pipe) getValue(index int) (item reflect.Value, keep bool) {
+func (p *_Pipe) getValue(index int) (item reflect.Value, keep bool) {
 	if p.srcPipe != nil {
 		item, keep = p.srcPipe.getValue(index)
 	} else {
@@ -186,7 +186,7 @@ func (p *Pipe) getValue(index int) (item reflect.Value, keep bool) {
 	return
 }
 
-func (p *Pipe) getOutType() reflect.Type {
+func (p *_Pipe) getOutType() reflect.Type {
 	if p.proc != nil {
 		return p.proc.GetOutType()
 	} else if p.arr != nil {
@@ -196,7 +196,7 @@ func (p *Pipe) getOutType() reflect.Type {
 	}
 }
 
-func (p *Pipe) ToSlice() interface{} {
+func (p *_Pipe) ToSlice() interface{} {
 	if p.proc == nil {
 		return p.arr
 	}
@@ -213,7 +213,7 @@ func (p *Pipe) ToSlice() interface{} {
 	return newSliceValue.Interface()
 }
 
-func (p *Pipe) ToMap(getKey, getVal interface{}) interface{} {
+func (p *_Pipe) ToMap(getKey, getVal interface{}) interface{} {
 	outElemType := p.getOutType()
 	var keyType, valType reflect.Type
 	getKeyValue := reflect.ValueOf(getKey)
@@ -256,7 +256,7 @@ func (p *Pipe) ToMap(getKey, getVal interface{}) interface{} {
 	return newMapValue.Interface()
 }
 
-func (p *Pipe) ToMap2(getPair interface{}) interface{} {
+func (p *_Pipe) ToMap2(getPair interface{}) interface{} {
 	getPairValue := reflect.ValueOf(getPair)
 	getPairType := getPairValue.Type()
 	outElemType := p.getOutType()
@@ -277,7 +277,7 @@ func (p *Pipe) ToMap2(getPair interface{}) interface{} {
 	return newMapValue.Interface()
 }
 
-func (p *Pipe) ToGroupMap(getKey, getVal interface{}) interface{} {
+func (p *_Pipe) ToGroupMap(getKey, getVal interface{}) interface{} {
 	outElemType := p.getOutType()
 	var keyType, valType reflect.Type
 	getKeyValue := reflect.ValueOf(getKey)
@@ -329,7 +329,7 @@ func (p *Pipe) ToGroupMap(getKey, getVal interface{}) interface{} {
 	return newMapValue.Interface()
 }
 
-func (p *Pipe) ToGroupMap2(getPair interface{}) interface{} {
+func (p *_Pipe) ToGroupMap2(getPair interface{}) interface{} {
 	getPairValue := reflect.ValueOf(getPair)
 	getPairType := getPairValue.Type()
 	outElemType := p.getOutType()
@@ -359,7 +359,7 @@ func (p *Pipe) ToGroupMap2(getPair interface{}) interface{} {
 	return newMapValue.Interface()
 }
 
-func (p *Pipe) Reduce(initValue interface{}, proc interface{}) interface{} {
+func (p *_Pipe) Reduce(initValue interface{}, proc interface{}) interface{} {
 	length := p.srcLen()
 	outElemType := p.getOutType()
 	procValue := reflect.ValueOf(proc)
@@ -399,7 +399,7 @@ func (s *_SortDelegate) Swap(i, j int) {
 	s.Arr.Index(j).Set(reflect.ValueOf(ti))
 }
 
-func (p *Pipe) Sort(less interface{}) *Pipe {
+func (p *_Pipe) Sort(less interface{}) *_Pipe {
 	lessValue := reflect.ValueOf(less)
 	lessType := lessValue.Type()
 	outElemType := p.getOutType()
@@ -411,12 +411,12 @@ func (p *Pipe) Sort(less interface{}) *Pipe {
 		lessFunc: lessValue,
 	}
 	sort.Stable(delegate)
-	return &Pipe{
+	return &_Pipe{
 		arr: delegate.Arr.Interface(),
 	}
 }
 
-func (p *Pipe) Reverse() *Pipe {
+func (p *_Pipe) Reverse() *_Pipe {
 	outElemType := p.getOutType()
 	length := p.srcLen()
 	newSliceType := reflect.SliceOf(outElemType)
@@ -427,7 +427,7 @@ func (p *Pipe) Reverse() *Pipe {
 			newSliceValue = reflect.Append(newSliceValue, itemValue)
 		}
 	}
-	return &Pipe{
+	return &_Pipe{
 		arr: newSliceValue.Interface(),
 	}
 }

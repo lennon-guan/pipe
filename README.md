@@ -1,15 +1,18 @@
 # A golang library that makes operations on slice easilier
 
 ## What can I do?
-* data process
+* slice process
   * Map
   * Filter
   * Sort
   * Reverse
+* map process
+  * Keys
+  * Values
 * output
   * ToSlice
-  * ToMap
-  * ToGroupMap
+  * ToMap/ToMap2
+  * ToGroupMap/ToGroupMap2
   * Reduce
 
 ## Installation
@@ -59,6 +62,12 @@ go get github.com/lennon-guan/pipe
 			func(v int) string { return fmt.Sprintf("Val-%d", v) },
 		).(map[string]string)
 	// dst is map[Key-1:Val-1 Key-5:Val-5 Key-4:Val-4 Key-3:Val-3 Key-2:Val-2]
+	src := []int{5, 4, 3, 2, 1}
+	dst := pipe.NewPipe(src).
+		ToMap2(func(v int) (string, string) {
+		return fmt.Sprintf("Key-%d", v), fmt.Sprintf("Val-%d", v)
+	}).(map[string]string)
+	// dst is map[Key-1:Val-1 Key-5:Val-5 Key-4:Val-4 Key-3:Val-3 Key-2:Val-2]
 ```
 ```go
 	src := []int{5, 4, 3, 2, 1}
@@ -72,6 +81,18 @@ go get github.com/lennon-guan/pipe
 			}
 		},
 		func(v int) int { return v },
+	).(map[string][]int)
+	// dst is map[odd:[5 3 1] even:[4 2]]
+	src := []int{5, 4, 3, 2, 1}
+	dst := pipe.NewPipe(src).
+		ToGroupMap2(
+		func(v int) (string, int) {
+			if v%2 != 0 {
+				return "odd", v
+			} else {
+				return "even", v
+			}
+		},
 	).(map[string][]int)
 	// dst is map[odd:[5 3 1] even:[4 2]]
 ```

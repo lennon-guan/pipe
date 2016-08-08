@@ -225,6 +225,27 @@ func (p *Pipe) ToMap(getKey, getVal interface{}) interface{} {
 	return newMapValue.Interface()
 }
 
+func (p *Pipe) ToMap2(getPair interface{}) interface{} {
+	getPairValue := reflect.ValueOf(getPair)
+	getPairType := getPairValue.Type()
+	outElemType := p.getOutType()
+	if !isGoodFunc(getPairType, []interface{}{outElemType}, []interface{}{nil, nil}) {
+		panic("getPair func invalid")
+	}
+	keyType := getPairType.Out(0)
+	valType := getPairType.Out(1)
+	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, valType))
+	length := p.srcLen()
+	for i := 0; i < length; i++ {
+		itemValue, keep := p.getValue(i)
+		if keep {
+			outs := getPairValue.Call([]reflect.Value{itemValue})
+			newMapValue.SetMapIndex(outs[0], outs[1])
+		}
+	}
+	return newMapValue.Interface()
+}
+
 func (p *Pipe) ToGroupMap(getKey, getVal interface{}) interface{} {
 	getKeyValue := reflect.ValueOf(getKey)
 	getKeyType := getKeyValue.Type()
@@ -241,7 +262,6 @@ func (p *Pipe) ToGroupMap(getKey, getVal interface{}) interface{} {
 	valType := getValType.Out(0)
 	sliceType := reflect.SliceOf(valType)
 	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, sliceType))
-	//zeroValue := reflect.Zero(sliceType)
 	length := p.srcLen()
 	for i := 0; i < length; i++ {
 		itemValue, keep := p.getValue(i)
@@ -250,6 +270,36 @@ func (p *Pipe) ToGroupMap(getKey, getVal interface{}) interface{} {
 		}
 		keyValue := getKeyValue.Call([]reflect.Value{itemValue})[0]
 		valValue := getValValue.Call([]reflect.Value{itemValue})[0]
+		slot := newMapValue.MapIndex(keyValue)
+		if !slot.IsValid() {
+			slot = reflect.MakeSlice(sliceType, 0, length-i)
+		}
+		slot = reflect.Append(slot, valValue)
+		newMapValue.SetMapIndex(keyValue, slot)
+	}
+	return newMapValue.Interface()
+}
+
+func (p *Pipe) ToGroupMap2(getPair interface{}) interface{} {
+	getPairValue := reflect.ValueOf(getPair)
+	getPairType := getPairValue.Type()
+	outElemType := p.getOutType()
+	if !isGoodFunc(getPairType, []interface{}{outElemType}, []interface{}{nil, nil}) {
+		panic("getPair func invalid")
+	}
+	keyType := getPairType.Out(0)
+	valType := getPairType.Out(1)
+	sliceType := reflect.SliceOf(valType)
+	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, sliceType))
+	length := p.srcLen()
+	for i := 0; i < length; i++ {
+		itemValue, keep := p.getValue(i)
+		if !keep {
+			continue
+		}
+		outs := getPairValue.Call([]reflect.Value{itemValue})
+		keyValue := outs[0]
+		valValue := outs[1]
 		slot := newMapValue.MapIndex(keyValue)
 		if !slot.IsValid() {
 			slot = reflect.MakeSlice(sliceType, 0, length-i)

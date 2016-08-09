@@ -56,7 +56,7 @@ type User struct {
 func TestMap3(t *testing.T) {
 	src := []User{User{UserId: 1}, User{UserId: 2}}
 	dst := NewPipe(src).
-		Map(func(item User) int { return item.UserId }).
+		Map(func(item interface{}) int { return item.(User).UserId }).
 		ToSlice().([]int)
 	fmt.Println(dst)
 	if !intSliceEqual(dst, 1, 2) {

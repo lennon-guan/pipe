@@ -17,6 +17,15 @@ type _MapProc struct {
 	Func    reflect.Value
 }
 
+func isTypeMatched(a, b reflect.Type) bool {
+	if a == b {
+		return true
+	} else if a.Kind() == reflect.Interface {
+		return b.Implements(a)
+	}
+	return false
+}
+
 func isGoodFunc(fType reflect.Type, intypes, outtypes []interface{}) bool {
 	if fType.Kind() != reflect.Func {
 		return false
@@ -29,7 +38,7 @@ func isGoodFunc(fType reflect.Type, intypes, outtypes []interface{}) bool {
 		if t == nil {
 			continue
 		}
-		if tt, ok := t.(reflect.Type); ok && tt != argType {
+		if tt, ok := t.(reflect.Type); ok && !isTypeMatched(tt, argType) {
 			return false
 		}
 		if tk, ok := t.(reflect.Kind); ok && tk != argType.Kind() {
@@ -44,7 +53,7 @@ func isGoodFunc(fType reflect.Type, intypes, outtypes []interface{}) bool {
 		if t == nil {
 			continue
 		}
-		if tt, ok := t.(reflect.Type); ok && tt != argType {
+		if tt, ok := t.(reflect.Type); ok && !isTypeMatched(tt, argType) {
 			return false
 		}
 		if tk, ok := t.(reflect.Kind); ok && tk != argType.Kind() {
@@ -81,7 +90,7 @@ func newMapProc(f interface{}, intype reflect.Type) *_MapProc {
 
 func (m *_MapProc) Next(input reflect.Value) (reflect.Value, bool) {
 	inType := input.Type()
-	if inType != m.InType {
+	if !isTypeMatched(m.InType, inType) {
 		panic(fmt.Sprintf("input type error. want %v got %v", m.InType, inType))
 	}
 	if m.Func.IsValid() {
@@ -117,7 +126,7 @@ func newFilterProc(f interface{}) *_FilterProc {
 
 func (f *_FilterProc) Next(input reflect.Value) (reflect.Value, bool) {
 	inType := input.Type()
-	if inType != f.InType {
+	if !isTypeMatched(f.InType, inType) {
 		panic(fmt.Sprintf("input type error. want %v got %v", f.InType, inType))
 	}
 	outs := f.Func.Call([]reflect.Value{input})

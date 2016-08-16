@@ -29,6 +29,16 @@ func strSliceEqual(a []string, b ...string) bool {
 	return true
 }
 
+func TestPToSlice(t *testing.T) {
+	src := []int{1, 2, 3}
+	dst := NewPipe(src).
+		Map(func(item int) string { return fmt.Sprintf("#%d", item) }).
+		PToSlice().([]string)
+	if !strSliceEqual(dst, "#1", "#2", "#3") {
+		t.Error(fmt.Sprintf("wrong dst %v", dst))
+	}
+}
+
 func TestMap(t *testing.T) {
 	src := []int{1, 2, 3}
 	dst := NewPipe(src).
@@ -77,6 +87,15 @@ func TestReduce(t *testing.T) {
 	src := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	sum := NewPipe(src).
 		Reduce(0, func(s, item int) int { return s + item }).(int)
+	if sum != 55 {
+		t.Error(fmt.Sprintf("sum %v != 55", sum))
+	}
+}
+
+func TestPReduce(t *testing.T) {
+	src := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	sum := NewPipe(src).
+		PReduce(0, func(s, item int) int { return s + item }).(int)
 	if sum != 55 {
 		t.Error(fmt.Sprintf("sum %v != 55", sum))
 	}
@@ -155,6 +174,21 @@ func TestToMap(t *testing.T) {
 			t.Error("value wrong")
 		}
 	}
+	dst = NewPipe(src).
+		PToMap(
+		func(v int) string { return fmt.Sprintf("Key-%d", v) },
+		func(v int) string { return fmt.Sprintf("Val-%d", v) },
+	).(map[string]string)
+	if len(dst) != 5 {
+		t.Error("to map fail. len not matched")
+	}
+	for i := 1; i <= 5; i++ {
+		k := fmt.Sprintf("Key-%d", i)
+		v := fmt.Sprintf("Val-%d", i)
+		if dst[k] != v {
+			t.Error("value wrong")
+		}
+	}
 }
 
 func TestToMapNil(t *testing.T) {
@@ -191,12 +225,46 @@ func TestToMap2(t *testing.T) {
 			t.Error("value wrong")
 		}
 	}
+	dst = NewPipe(src).
+		PToMap2(func(v int) (string, string) {
+		return fmt.Sprintf("Key-%d", v), fmt.Sprintf("Val-%d", v)
+	}).(map[string]string)
+	if len(dst) != 5 {
+		t.Error("to map fail. len not matched")
+	}
+	for i := 1; i <= 5; i++ {
+		k := fmt.Sprintf("Key-%d", i)
+		v := fmt.Sprintf("Val-%d", i)
+		if dst[k] != v {
+			t.Error("value wrong")
+		}
+	}
 }
 
 func TestToGroupMap(t *testing.T) {
 	src := []int{5, 4, 3, 2, 1}
 	dst := NewPipe(src).
 		ToGroupMap(
+		func(v int) string {
+			if v%2 != 0 {
+				return "odd"
+			} else {
+				return "even"
+			}
+		},
+		func(v int) int { return v },
+	).(map[string][]int)
+	if len(dst) != 2 {
+		t.Error("to groupmap fail. len not matched")
+	}
+	if !intSliceEqual(dst["odd"], 5, 3, 1) {
+		t.Error("to groupmap fail.")
+	}
+	if !intSliceEqual(dst["even"], 4, 2) {
+		t.Error("to groupmap fail.")
+	}
+	dst = NewPipe(src).
+		PToGroupMap(
 		func(v int) string {
 			if v%2 != 0 {
 				return "odd"
@@ -245,6 +313,25 @@ func TestToGroupMap2(t *testing.T) {
 	src := []int{5, 4, 3, 2, 1}
 	dst := NewPipe(src).
 		ToGroupMap2(
+		func(v int) (string, int) {
+			if v%2 != 0 {
+				return "odd", v
+			} else {
+				return "even", v
+			}
+		},
+	).(map[string][]int)
+	if len(dst) != 2 {
+		t.Error("to groupmap fail. len not matched")
+	}
+	if !intSliceEqual(dst["odd"], 5, 3, 1) {
+		t.Error("to groupmap fail.")
+	}
+	if !intSliceEqual(dst["even"], 4, 2) {
+		t.Error("to groupmap fail.")
+	}
+	dst = NewPipe(src).
+		PToGroupMap2(
 		func(v int) (string, int) {
 			if v%2 != 0 {
 				return "odd", v
@@ -314,13 +401,15 @@ func TestPEach(t *testing.T) {
 
 func longTimeProc(n int) int {
 	if n <= 2 {
-		return n
+		return 1
 	}
 	return longTimeProc(n-1) + longTimeProc(n-2)
 }
 
+const N = 35
+
 func BenchmarkEach(b *testing.B) {
-	src := []int{30, 30, 30, 30, 30}
+	src := []int{N, N, N, N, N}
 	var results [5]int
 	NewPipe(src).Each(func(item, index int) {
 		results[index] = longTimeProc(item)
@@ -328,9 +417,33 @@ func BenchmarkEach(b *testing.B) {
 }
 
 func BenchmarkPEach(b *testing.B) {
-	src := []int{30, 30, 30, 30, 30}
+	src := []int{N, N, N, N, N}
 	var results [5]int
 	NewPipe(src).PEach(func(item, index int) {
 		results[index] = longTimeProc(item)
 	})
+}
+
+func BenchmarkToSlice(b *testing.B) {
+	src := []int{N, N, N, N, N}
+	NewPipe(src).Map(longTimeProc).ToSlice()
+}
+
+func BenchmarkPToSlice(b *testing.B) {
+	src := []int{N, N, N, N, N}
+	NewPipe(src).Map(longTimeProc).PToSlice()
+}
+
+func sumIntReducer(sum, input int) int {
+	return sum + input
+}
+
+func BenchmarkReduce(b *testing.B) {
+	src := []int{N, N, N, N, N}
+	NewPipe(src).Map(longTimeProc).Reduce(0, sumIntReducer)
+}
+
+func BenchmarkPReduce(b *testing.B) {
+	src := []int{N, N, N, N, N}
+	NewPipe(src).Map(longTimeProc).PReduce(0, sumIntReducer)
 }

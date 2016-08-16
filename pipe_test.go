@@ -58,7 +58,6 @@ func TestMap3(t *testing.T) {
 	dst := NewPipe(src).
 		Map(func(item interface{}) int { return item.(User).UserId }).
 		ToSlice().([]int)
-	fmt.Println(dst)
 	if !intSliceEqual(dst, 1, 2) {
 		t.Error(fmt.Sprintf("wrong dst %v", dst))
 	}
@@ -289,4 +288,49 @@ func TestMapPipeValues(t *testing.T) {
 	if !intSliceEqual(dst, 87, 91, 95) {
 		t.Error("values wrong")
 	}
+}
+
+func TestEach(t *testing.T) {
+	src := []int{1, 2, 3, 4, 5}
+	dst := make([]int, 5)
+	NewPipe(src).
+		Map(func(i int) int { return i * i }).
+		Each(func(item, index int) { dst[index] = item })
+	if !intSliceEqual(dst, 1, 4, 9, 16, 25) {
+		t.Error("values wrong")
+	}
+}
+
+func TestPEach(t *testing.T) {
+	src := []int{1, 2, 3, 4, 5}
+	dst := make([]int, 5)
+	NewPipe(src).
+		Map(func(i int) int { return i * i }).
+		PEach(func(item, index int) { dst[index] = item })
+	if !intSliceEqual(dst, 1, 4, 9, 16, 25) {
+		t.Error("values wrong")
+	}
+}
+
+func longTimeProc(n int) int {
+	if n <= 2 {
+		return n
+	}
+	return longTimeProc(n-1) + longTimeProc(n-2)
+}
+
+func BenchmarkEach(b *testing.B) {
+	src := []int{30, 30, 30, 30, 30}
+	var results [5]int
+	NewPipe(src).Each(func(item, index int) {
+		results[index] = longTimeProc(item)
+	})
+}
+
+func BenchmarkPEach(b *testing.B) {
+	src := []int{30, 30, 30, 30, 30}
+	var results [5]int
+	NewPipe(src).PEach(func(item, index int) {
+		results[index] = longTimeProc(item)
+	})
 }

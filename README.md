@@ -6,6 +6,7 @@
   * Filter
   * Sort
   * Reverse
+  * Each / PEach (parallel version of Each)
 * map process
   * Keys
   * Values
@@ -95,6 +96,24 @@ go get github.com/lennon-guan/pipe
 		},
 	).(map[string][]int)
 	// dst is map[odd:[5 3 1] even:[4 2]]
+```
+```
+	src := []int{1, 2, 3, 4, 5}
+	dst := make([]int, 5)
+	pipe.NewPipe(src).
+		Map(func(i int) int { return i * i }).
+		Each(func(item, index int) { dst[index] = item })
+	if !intSliceEqual(dst, 1, 4, 9, 16, 25) {
+		t.Error("values wrong")
+	}
+	src := []int{1, 2, 3, 4, 5}
+	dst := make([]int, 5)
+	pipe.NewPipe(src).
+		Map(func(i int) int { return i * i }).
+		PEach(func(item, index int) { dst[index] = item })
+	if !intSliceEqual(dst, 1, 4, 9, 16, 25) {
+		t.Error("values wrong")
+	}
 ```
 You can invoke map/filter function many times
 ```go

@@ -4,17 +4,12 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"sync"
 )
 
 type _IProc interface {
 	Next(reflect.Value) (reflect.Value, bool)
 	GetOutType() reflect.Type
-}
-
-type _MapProc struct {
-	InType  reflect.Type
-	OutType reflect.Type
-	Func    reflect.Value
 }
 
 func isTypeMatched(a, b reflect.Type) bool {
@@ -65,6 +60,12 @@ func isGoodFunc(fType reflect.Type, intypes, outtypes []interface{}) bool {
 
 func noop(input reflect.Value) reflect.Value {
 	return input
+}
+
+type _MapProc struct {
+	InType  reflect.Type
+	OutType reflect.Type
+	Func    reflect.Value
 }
 
 func newMapProc(f interface{}, intype reflect.Type) *_MapProc {
@@ -220,6 +221,46 @@ func (p *_Pipe) ToSlice() interface{} {
 		}
 	}
 	return newSliceValue.Interface()
+}
+
+func (p *_Pipe) Each(fn interface{}) {
+	fType := reflect.TypeOf(fn)
+	if !isGoodFunc(fType, []interface{}{p.getOutType(), reflect.Int}, []interface{}{}) {
+		panic("Invalid each process function")
+	}
+	fValue := reflect.ValueOf(fn)
+	length := p.srcLen()
+	index := 0
+	for i := 0; i < length; i++ {
+		itemValue, keep := p.getValue(i)
+		if keep {
+			fValue.Call([]reflect.Value{itemValue, reflect.ValueOf(index)})
+			index++
+		}
+	}
+}
+
+func (p *_Pipe) PEach(fn interface{}) {
+	fType := reflect.TypeOf(fn)
+	if !isGoodFunc(fType, []interface{}{p.getOutType(), reflect.Int}, []interface{}{}) {
+		panic("Invalid each process function")
+	}
+	fValue := reflect.ValueOf(fn)
+	var wg sync.WaitGroup
+	length := p.srcLen()
+	index := 0
+	for i := 0; i < length; i++ {
+		itemValue, keep := p.getValue(i)
+		if keep {
+			wg.Add(1)
+			go func(index int) {
+				defer wg.Done()
+				fValue.Call([]reflect.Value{itemValue, reflect.ValueOf(index)})
+			}(index)
+			index++
+		}
+	}
+	wg.Wait()
 }
 
 func (p *_Pipe) ToMap(getKey, getVal interface{}) interface{} {

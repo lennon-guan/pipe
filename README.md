@@ -6,15 +6,15 @@
   * Filter
   * Sort
   * Reverse
-  * Each / PEach (parallel version of Each)
 * map process
   * Keys
   * Values
-* output
-  * ToSlice
-  * ToMap/ToMap2
-  * ToGroupMap/ToGroupMap2
-  * Reduce
+* output (starting with "P" means parallel version)
+  * ToSlice / PToSlice
+  * ToMap / PToMap / ToMap2 / PToMap2
+  * ToGroupMap / PToGroupMap / ToGroupMap2 / PToGroupMap2
+  * Reduce / PReduce
+  * Each / PEach
 
 ## Installation
 ```

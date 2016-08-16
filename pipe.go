@@ -180,18 +180,90 @@ func (p *_Pipe) srcLen() int {
 	return reflect.ValueOf(pp.arr).Len()
 }
 
-func (p *_Pipe) getValue(index int) (item reflect.Value, keep bool) {
-	if p.srcPipe != nil {
-		item, keep = p.srcPipe.getValue(index)
-	} else {
-		item = reflect.ValueOf(p.arr).Index(index)
-		keep = true
+type _GetValueTask struct {
+	srcIndex   int
+	startValue reflect.Value
+	procList   []_IProc
+}
+
+func (t *_GetValueTask) GetValue() (item reflect.Value, keep bool) {
+	item = t.startValue
+	keep = true
+	if t.procList != nil {
+		for _, proc := range t.procList {
+			item, keep = proc.Next(item)
+			if !keep {
+				return
+			}
+		}
 	}
-	if !keep {
-		return
+	return
+}
+
+func (t *_GetValueTask) PGetValue() (item reflect.Value, keep bool) {
+	item = t.startValue
+	keep = true
+	if t.procList != nil {
+		done := make(chan int, 1)
+		go func() {
+			for _, proc := range t.procList {
+				item, keep = proc.Next(item)
+				if !keep {
+					break
+				}
+			}
+			done <- 1
+		}()
+		<-done
+		close(done)
+	}
+	return
+}
+
+func (t *_GetValueTask) Then(fn func(reflect.Value)) {
+	item, keep := t.PGetValue()
+	if keep {
+		fn(item)
+	}
+}
+
+func (t *_GetValueTask) UnstableThen(wg *sync.WaitGroup, fn func(reflect.Value)) {
+	go func() {
+		defer wg.Done()
+		item, keep := t.PGetValue()
+		if keep {
+			fn(item)
+		}
+	}()
+}
+
+func (t *_GetValueTask) StableThen(wait *WaitIndex, fn func(reflect.Value)) {
+	go func() {
+		item, keep := t.PGetValue()
+		if keep {
+			wait.Wait(t.srcIndex - 1)
+			fn(item)
+		}
+		wait.Done(t.srcIndex)
+	}()
+}
+
+func (p *_Pipe) getValue(index int) (task *_GetValueTask) {
+	if p.srcPipe != nil {
+		task = p.srcPipe.getValue(index)
+	} else {
+		task = &_GetValueTask{
+			srcIndex:   index,
+			startValue: reflect.ValueOf(p.arr).Index(index),
+		}
 	}
 	if p.proc != nil {
-		item, keep = p.proc.Next(item)
+		if task.procList == nil {
+			task.procList = make([]_IProc, 1, 10)
+			task.procList[0] = p.proc
+		} else {
+			task.procList = append(task.procList, p.proc)
+		}
 	}
 	return
 }
@@ -215,11 +287,28 @@ func (p *_Pipe) ToSlice() interface{} {
 	newSliceType := reflect.SliceOf(outElemType)
 	newSliceValue := reflect.MakeSlice(newSliceType, 0, length)
 	for i := 0; i < length; i++ {
-		itemValue, keep := p.getValue(i)
-		if keep {
+		p.getValue(i).Then(func(itemValue reflect.Value) {
 			newSliceValue = reflect.Append(newSliceValue, itemValue)
-		}
+		})
 	}
+	return newSliceValue.Interface()
+}
+
+func (p *_Pipe) PToSlice() interface{} {
+	if p.proc == nil {
+		return p.arr
+	}
+	length := p.srcLen()
+	outElemType := p.getOutType()
+	newSliceType := reflect.SliceOf(outElemType)
+	newSliceValue := reflect.MakeSlice(newSliceType, 0, length)
+	waitIndex := NewWaitIndex(length)
+	for i := 0; i < length; i++ {
+		p.getValue(i).StableThen(waitIndex, func(itemValue reflect.Value) {
+			newSliceValue = reflect.Append(newSliceValue, itemValue)
+		})
+	}
+	waitIndex.WaitAndClose()
 	return newSliceValue.Interface()
 }
 
@@ -232,11 +321,10 @@ func (p *_Pipe) Each(fn interface{}) {
 	length := p.srcLen()
 	index := 0
 	for i := 0; i < length; i++ {
-		itemValue, keep := p.getValue(i)
-		if keep {
+		p.getValue(i).Then(func(itemValue reflect.Value) {
 			fValue.Call([]reflect.Value{itemValue, reflect.ValueOf(index)})
 			index++
-		}
+		})
 	}
 }
 
@@ -249,17 +337,18 @@ func (p *_Pipe) PEach(fn interface{}) {
 	var wg sync.WaitGroup
 	length := p.srcLen()
 	index := 0
+	wi := NewWaitIndex(length)
 	for i := 0; i < length; i++ {
-		itemValue, keep := p.getValue(i)
-		if keep {
+		p.getValue(i).StableThen(wi, func(itemValue reflect.Value) {
 			wg.Add(1)
 			go func(index int) {
 				defer wg.Done()
 				fValue.Call([]reflect.Value{itemValue, reflect.ValueOf(index)})
 			}(index)
 			index++
-		}
+		})
 	}
+	wi.WaitAndClose()
 	wg.Wait()
 }
 
@@ -298,11 +387,55 @@ func (p *_Pipe) ToMap(getKey, getVal interface{}) interface{} {
 	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, valType))
 	length := p.srcLen()
 	for i := 0; i < length; i++ {
-		itemValue, keep := p.getValue(i)
-		if keep {
+		p.getValue(i).Then(func(itemValue reflect.Value) {
 			newMapValue.SetMapIndex(realGetKey(itemValue), realGetVal(itemValue))
-		}
+		})
 	}
+	return newMapValue.Interface()
+}
+
+func (p *_Pipe) PToMap(getKey, getVal interface{}) interface{} {
+	outElemType := p.getOutType()
+	var keyType, valType reflect.Type
+	getKeyValue := reflect.ValueOf(getKey)
+	var realGetKey, realGetVal func(reflect.Value) reflect.Value
+	if getKeyValue.IsValid() {
+		getKeyType := getKeyValue.Type()
+		if !isGoodFunc(getKeyType, []interface{}{outElemType}, []interface{}{nil}) {
+			panic("getKey func invalid")
+		}
+		keyType = getKeyType.Out(0)
+		realGetKey = func(input reflect.Value) reflect.Value {
+			return getKeyValue.Call([]reflect.Value{input})[0]
+		}
+	} else {
+		keyType = outElemType
+		realGetVal = noop
+	}
+	getValValue := reflect.ValueOf(getVal)
+	if getValValue.IsValid() {
+		getValType := getValValue.Type()
+		if !isGoodFunc(getValType, []interface{}{outElemType}, []interface{}{nil}) {
+			panic("getVal func invalid")
+		}
+		valType = getValType.Out(0)
+		realGetVal = func(input reflect.Value) reflect.Value {
+			return getValValue.Call([]reflect.Value{input})[0]
+		}
+	} else {
+		valType = outElemType
+		realGetVal = noop
+	}
+	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, valType))
+	length := p.srcLen()
+	var wg sync.WaitGroup
+	wg.Add(length)
+	for i := 0; i < length; i++ {
+		p.getValue(i).UnstableThen(&wg, func(itemValue reflect.Value) {
+			newMapValue.SetMapIndex(realGetKey(itemValue), realGetVal(itemValue))
+		})
+	}
+	wg.Wait()
 	return newMapValue.Interface()
 }
 
@@ -318,12 +451,34 @@ func (p *_Pipe) ToMap2(getPair interface{}) interface{} {
 	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, valType))
 	length := p.srcLen()
 	for i := 0; i < length; i++ {
-		itemValue, keep := p.getValue(i)
-		if keep {
+		p.getValue(i).Then(func(itemValue reflect.Value) {
 			outs := getPairValue.Call([]reflect.Value{itemValue})
 			newMapValue.SetMapIndex(outs[0], outs[1])
-		}
+		})
 	}
+	return newMapValue.Interface()
+}
+
+func (p *_Pipe) PToMap2(getPair interface{}) interface{} {
+	getPairValue := reflect.ValueOf(getPair)
+	getPairType := getPairValue.Type()
+	outElemType := p.getOutType()
+	if !isGoodFunc(getPairType, []interface{}{outElemType}, []interface{}{nil, nil}) {
+		panic("getPair func invalid")
+	}
+	keyType := getPairType.Out(0)
+	valType := getPairType.Out(1)
+	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, valType))
+	length := p.srcLen()
+	var wg sync.WaitGroup
+	wg.Add(length)
+	for i := 0; i < length; i++ {
+		p.getValue(i).UnstableThen(&wg, func(itemValue reflect.Value) {
+			outs := getPairValue.Call([]reflect.Value{itemValue})
+			newMapValue.SetMapIndex(outs[0], outs[1])
+		})
+	}
+	wg.Wait()
 	return newMapValue.Interface()
 }
 
@@ -363,19 +518,69 @@ func (p *_Pipe) ToGroupMap(getKey, getVal interface{}) interface{} {
 	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, sliceType))
 	length := p.srcLen()
 	for i := 0; i < length; i++ {
-		itemValue, keep := p.getValue(i)
-		if !keep {
-			continue
-		}
-		keyValue := realGetKey(itemValue)
-		valValue := realGetVal(itemValue)
-		slot := newMapValue.MapIndex(keyValue)
-		if !slot.IsValid() {
-			slot = reflect.MakeSlice(sliceType, 0, length-i)
-		}
-		slot = reflect.Append(slot, valValue)
-		newMapValue.SetMapIndex(keyValue, slot)
+		p.getValue(i).Then(func(itemValue reflect.Value) {
+			keyValue := realGetKey(itemValue)
+			valValue := realGetVal(itemValue)
+			slot := newMapValue.MapIndex(keyValue)
+			if !slot.IsValid() {
+				slot = reflect.MakeSlice(sliceType, 0, length-i)
+			}
+			slot = reflect.Append(slot, valValue)
+			newMapValue.SetMapIndex(keyValue, slot)
+		})
 	}
+	return newMapValue.Interface()
+}
+
+func (p *_Pipe) PToGroupMap(getKey, getVal interface{}) interface{} {
+	outElemType := p.getOutType()
+	var keyType, valType reflect.Type
+	getKeyValue := reflect.ValueOf(getKey)
+	var realGetKey, realGetVal func(reflect.Value) reflect.Value
+	if getKeyValue.IsValid() {
+		getKeyType := getKeyValue.Type()
+		if !isGoodFunc(getKeyType, []interface{}{outElemType}, []interface{}{nil}) {
+			panic("getKey func invalid")
+		}
+		keyType = getKeyType.Out(0)
+		realGetKey = func(input reflect.Value) reflect.Value {
+			return getKeyValue.Call([]reflect.Value{input})[0]
+		}
+	} else {
+		keyType = outElemType
+		realGetVal = noop
+	}
+	getValValue := reflect.ValueOf(getVal)
+	if getValValue.IsValid() {
+		getValType := getValValue.Type()
+		if !isGoodFunc(getValType, []interface{}{outElemType}, []interface{}{nil}) {
+			panic("getVal func invalid")
+		}
+		valType = getValType.Out(0)
+		realGetVal = func(input reflect.Value) reflect.Value {
+			return getValValue.Call([]reflect.Value{input})[0]
+		}
+	} else {
+		valType = outElemType
+		realGetVal = noop
+	}
+	sliceType := reflect.SliceOf(valType)
+	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, sliceType))
+	length := p.srcLen()
+	wi := NewWaitIndex(length)
+	for i := 0; i < length; i++ {
+		p.getValue(i).StableThen(wi, func(itemValue reflect.Value) {
+			keyValue := realGetKey(itemValue)
+			valValue := realGetVal(itemValue)
+			slot := newMapValue.MapIndex(keyValue)
+			if !slot.IsValid() {
+				slot = reflect.MakeSlice(sliceType, 0, length-i)
+			}
+			slot = reflect.Append(slot, valValue)
+			newMapValue.SetMapIndex(keyValue, slot)
+		})
+	}
+	wi.WaitAndClose()
 	return newMapValue.Interface()
 }
 
@@ -392,20 +597,48 @@ func (p *_Pipe) ToGroupMap2(getPair interface{}) interface{} {
 	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, sliceType))
 	length := p.srcLen()
 	for i := 0; i < length; i++ {
-		itemValue, keep := p.getValue(i)
-		if !keep {
-			continue
-		}
-		outs := getPairValue.Call([]reflect.Value{itemValue})
-		keyValue := outs[0]
-		valValue := outs[1]
-		slot := newMapValue.MapIndex(keyValue)
-		if !slot.IsValid() {
-			slot = reflect.MakeSlice(sliceType, 0, length-i)
-		}
-		slot = reflect.Append(slot, valValue)
-		newMapValue.SetMapIndex(keyValue, slot)
+		p.getValue(i).Then(func(itemValue reflect.Value) {
+			outs := getPairValue.Call([]reflect.Value{itemValue})
+			keyValue := outs[0]
+			valValue := outs[1]
+			slot := newMapValue.MapIndex(keyValue)
+			if !slot.IsValid() {
+				slot = reflect.MakeSlice(sliceType, 0, length-i)
+			}
+			slot = reflect.Append(slot, valValue)
+			newMapValue.SetMapIndex(keyValue, slot)
+		})
 	}
+	return newMapValue.Interface()
+}
+
+func (p *_Pipe) PToGroupMap2(getPair interface{}) interface{} {
+	getPairValue := reflect.ValueOf(getPair)
+	getPairType := getPairValue.Type()
+	outElemType := p.getOutType()
+	if !isGoodFunc(getPairType, []interface{}{outElemType}, []interface{}{nil, nil}) {
+		panic("getPair func invalid")
+	}
+	keyType := getPairType.Out(0)
+	valType := getPairType.Out(1)
+	sliceType := reflect.SliceOf(valType)
+	newMapValue := reflect.MakeMap(reflect.MapOf(keyType, sliceType))
+	length := p.srcLen()
+	wi := NewWaitIndex(length)
+	for i := 0; i < length; i++ {
+		p.getValue(i).StableThen(wi, func(itemValue reflect.Value) {
+			outs := getPairValue.Call([]reflect.Value{itemValue})
+			keyValue := outs[0]
+			valValue := outs[1]
+			slot := newMapValue.MapIndex(keyValue)
+			if !slot.IsValid() {
+				slot = reflect.MakeSlice(sliceType, 0, length-i)
+			}
+			slot = reflect.Append(slot, valValue)
+			newMapValue.SetMapIndex(keyValue, slot)
+		})
+	}
+	wi.WaitAndClose()
 	return newMapValue.Interface()
 }
 
@@ -419,12 +652,35 @@ func (p *_Pipe) Reduce(initValue interface{}, proc interface{}) interface{} {
 		panic("reduce function invalid")
 	}
 	for i := 0; i < length; i++ {
-		itemValue, keep := p.getValue(i)
-		if keep {
+		p.getValue(i).Then(func(itemValue reflect.Value) {
 			outs := procValue.Call([]reflect.Value{reflect.ValueOf(initValue), itemValue})
 			initValue = outs[0].Interface()
-		}
+		})
 	}
+	return initValue
+}
+
+func (p *_Pipe) PReduce(initValue interface{}, proc interface{}) interface{} {
+	length := p.srcLen()
+	outElemType := p.getOutType()
+	procValue := reflect.ValueOf(proc)
+	procType := procValue.Type()
+	initType := reflect.TypeOf(initValue)
+	if !isGoodFunc(procType, []interface{}{initType, outElemType}, []interface{}{initType}) {
+		panic("reduce function invalid")
+	}
+	var lock sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(length)
+	for i := 0; i < length; i++ {
+		p.getValue(i).UnstableThen(&wg, func(itemValue reflect.Value) {
+			lock.Lock()
+			defer lock.Unlock()
+			outs := procValue.Call([]reflect.Value{reflect.ValueOf(initValue), itemValue})
+			initValue = outs[0].Interface()
+		})
+	}
+	wg.Wait()
 	return initValue
 }
 
@@ -472,7 +728,7 @@ func (p *_Pipe) Reverse() *_Pipe {
 	newSliceType := reflect.SliceOf(outElemType)
 	newSliceValue := reflect.MakeSlice(newSliceType, 0, length)
 	for i := length - 1; i >= 0; i-- {
-		itemValue, keep := p.getValue(i)
+		itemValue, keep := p.getValue(i).GetValue()
 		if keep {
 			newSliceValue = reflect.Append(newSliceValue, itemValue)
 		}

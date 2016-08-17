@@ -722,6 +722,26 @@ func (p *_Pipe) Sort(less interface{}) *_Pipe {
 	}
 }
 
+func (p *_Pipe) Uniq() *_Pipe {
+	outElemType := p.getOutType()
+	length := p.srcLen()
+	newSliceType := reflect.SliceOf(outElemType)
+	newSliceValue := reflect.MakeSlice(newSliceType, 0, length)
+	existsValues := make(map[interface{}]int)
+	for i := 0; i < length; i++ {
+		p.getValue(i).Then(func(itemValue reflect.Value) {
+			val := itemValue.Interface()
+			if _, exists := existsValues[val]; !exists {
+				existsValues[val] = 1
+				newSliceValue = reflect.Append(newSliceValue, itemValue)
+			}
+		})
+	}
+	return &_Pipe{
+		arr: newSliceValue.Interface(),
+	}
+}
+
 func (p *_Pipe) Reverse() *_Pipe {
 	outElemType := p.getOutType()
 	length := p.srcLen()

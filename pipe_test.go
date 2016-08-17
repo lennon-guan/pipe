@@ -39,6 +39,16 @@ func TestPToSlice(t *testing.T) {
 	}
 }
 
+func TestUniq(t *testing.T) {
+	src := []int{1, 2, 1, 2, 3}
+	dst := NewPipe(src).
+		Uniq().
+		ToSlice().([]int)
+	if !intSliceEqual(dst, 1, 2, 3) {
+		t.Error(fmt.Sprintf("wrong dst %v", dst))
+	}
+}
+
 func TestMap(t *testing.T) {
 	src := []int{1, 2, 3}
 	dst := NewPipe(src).
@@ -186,7 +196,7 @@ func TestToMap(t *testing.T) {
 		k := fmt.Sprintf("Key-%d", i)
 		v := fmt.Sprintf("Val-%d", i)
 		if dst[k] != v {
-			t.Error("value wrong")
+			t.Error(fmt.Sprintf("value wrong m[%s] = %s != %s", k, dst[k], v))
 		}
 	}
 }

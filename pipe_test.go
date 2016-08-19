@@ -175,13 +175,13 @@ func TestToMap(t *testing.T) {
 		func(v int) string { return fmt.Sprintf("Val-%d", v) },
 	).(map[string]string)
 	if len(dst) != 5 {
-		t.Error("to map fail. len not matched")
+		t.Error("ToMap: to map fail. len not matched", len(dst), 5)
 	}
 	for i := 1; i <= 5; i++ {
 		k := fmt.Sprintf("Key-%d", i)
 		v := fmt.Sprintf("Val-%d", i)
 		if dst[k] != v {
-			t.Error("value wrong")
+			t.Error(fmt.Sprintf("ToMap: value wrong m[%s] = %s != %s", k, dst[k], v))
 		}
 	}
 	dst = NewPipe(src).
@@ -190,13 +190,13 @@ func TestToMap(t *testing.T) {
 		func(v int) string { return fmt.Sprintf("Val-%d", v) },
 	).(map[string]string)
 	if len(dst) != 5 {
-		t.Error("to map fail. len not matched")
+		t.Error("PToMap: to map fail. len not matched", len(dst), 5)
 	}
 	for i := 1; i <= 5; i++ {
 		k := fmt.Sprintf("Key-%d", i)
 		v := fmt.Sprintf("Val-%d", i)
 		if dst[k] != v {
-			t.Error(fmt.Sprintf("value wrong m[%s] = %s != %s", k, dst[k], v))
+			t.Error(fmt.Sprintf("PToMap: value wrong m[%s] = %s != %s", k, dst[k], v))
 		}
 	}
 }
@@ -226,13 +226,13 @@ func TestToMap2(t *testing.T) {
 		return fmt.Sprintf("Key-%d", v), fmt.Sprintf("Val-%d", v)
 	}).(map[string]string)
 	if len(dst) != 5 {
-		t.Error("to map fail. len not matched")
+		t.Error("ToMap2: to map fail. len not matched", len(dst), 5)
 	}
 	for i := 1; i <= 5; i++ {
 		k := fmt.Sprintf("Key-%d", i)
 		v := fmt.Sprintf("Val-%d", i)
 		if dst[k] != v {
-			t.Error("value wrong")
+			t.Error("ToMap2: value wrong", k, dst[k], v)
 		}
 	}
 	dst = NewPipe(src).
@@ -240,13 +240,13 @@ func TestToMap2(t *testing.T) {
 		return fmt.Sprintf("Key-%d", v), fmt.Sprintf("Val-%d", v)
 	}).(map[string]string)
 	if len(dst) != 5 {
-		t.Error("to map fail. len not matched")
+		t.Error("PToMap2: to map fail. len not matched", len(dst), 5)
 	}
 	for i := 1; i <= 5; i++ {
 		k := fmt.Sprintf("Key-%d", i)
 		v := fmt.Sprintf("Val-%d", i)
 		if dst[k] != v {
-			t.Error("value wrong")
+			t.Error("PToMap2: value wrong", k, dst[k], v)
 		}
 	}
 }

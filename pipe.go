@@ -430,9 +430,12 @@ func (p *_Pipe) PToMap(getKey, getVal interface{}) interface{} {
 	length := p.srcLen()
 	var wg sync.WaitGroup
 	wg.Add(length)
+	var lock sync.Mutex
 	for i := 0; i < length; i++ {
 		p.getValue(i).UnstableThen(&wg, func(itemValue reflect.Value) {
+			lock.Lock()
 			newMapValue.SetMapIndex(realGetKey(itemValue), realGetVal(itemValue))
+			lock.Unlock()
 		})
 	}
 	wg.Wait()
@@ -472,10 +475,13 @@ func (p *_Pipe) PToMap2(getPair interface{}) interface{} {
 	length := p.srcLen()
 	var wg sync.WaitGroup
 	wg.Add(length)
+	var lock sync.Mutex
 	for i := 0; i < length; i++ {
 		p.getValue(i).UnstableThen(&wg, func(itemValue reflect.Value) {
 			outs := getPairValue.Call([]reflect.Value{itemValue})
+			lock.Lock()
 			newMapValue.SetMapIndex(outs[0], outs[1])
+			lock.Unlock()
 		})
 	}
 	wg.Wait()

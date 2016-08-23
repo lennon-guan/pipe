@@ -15,6 +15,7 @@
   * ToGroupMap / PToGroupMap / ToGroupMap2 / PToGroupMap2
   * Reduce / PReduce
   * Each / PEach
+  * Some
 
 ## Installation
 ```
@@ -97,7 +98,7 @@ go get github.com/lennon-guan/pipe
 	).(map[string][]int)
 	// dst is map[odd:[5 3 1] even:[4 2]]
 ```
-```
+```go
 	src := []int{1, 2, 3, 4, 5}
 	dst := make([]int, 5)
 	pipe.NewPipe(src).
@@ -124,3 +125,5 @@ You can invoke map/filter function many times
 			ToSlice().([]int)
 	// dst is []int{9, 36, 81}
 ```
+
+More examples are avaliable in pipe_test.go

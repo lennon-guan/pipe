@@ -690,6 +690,29 @@ func (p *_Pipe) PReduce(initValue interface{}, proc interface{}) interface{} {
 	return initValue
 }
 
+func (p *_Pipe) Some(fn interface{}, atLeast int) bool {
+	length := p.srcLen()
+	outElemType := p.getOutType()
+	fnValue := reflect.ValueOf(fn)
+	fnType := fnValue.Type()
+	if !isGoodFunc(fnType, []interface{}{outElemType}, []interface{}{reflect.Bool}) {
+		panic("reduce function invalid")
+	}
+	fulfillNum := 0
+	for i := 0; i < length; i++ {
+		p.getValue(i).Then(func(itemValue reflect.Value) {
+			outs := fnValue.Call([]reflect.Value{itemValue})
+			if outs[0].Bool() {
+				fulfillNum++
+			}
+		})
+		if fulfillNum >= atLeast {
+			return true
+		}
+	}
+	return false
+}
+
 type _SortDelegate struct {
 	Arr      reflect.Value
 	lessFunc reflect.Value

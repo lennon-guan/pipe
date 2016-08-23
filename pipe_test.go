@@ -409,6 +409,19 @@ func TestPEach(t *testing.T) {
 	}
 }
 
+func TestSome1(t *testing.T) {
+	src := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	lessThen := func(max int) func(int) bool {
+		return func(v int) bool { return v < max }
+	}
+	if NewPipe(src).Some(lessThen(5), 5) {
+		t.Error("Some(lessThen(5), 5) shoud be false")
+	}
+	if !NewPipe(src).Some(lessThen(5), 4) {
+		t.Error("Some(lessThen(5), 4) shoud be true")
+	}
+}
+
 func longTimeProc(n int) int {
 	if n <= 2 {
 		return 1

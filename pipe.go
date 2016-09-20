@@ -713,6 +713,27 @@ func (p *_Pipe) Some(fn interface{}, atLeast int) bool {
 	return false
 }
 
+func (p *_Pipe) Every(fn interface{}) bool {
+	length := p.srcLen()
+	outElemType := p.getOutType()
+	fnValue := reflect.ValueOf(fn)
+	fnType := fnValue.Type()
+	if !isGoodFunc(fnType, []interface{}{outElemType}, []interface{}{reflect.Bool}) {
+		panic("reduce function invalid")
+	}
+	for i := 0; i < length; i++ {
+		var isSatisfy bool
+		p.getValue(i).Then(func(itemValue reflect.Value) {
+			outs := fnValue.Call([]reflect.Value{itemValue})
+			isSatisfy = outs[0].Bool()
+		})
+		if !isSatisfy {
+			return false
+		}
+	}
+	return true
+}
+
 type _SortDelegate struct {
 	Arr      reflect.Value
 	lessFunc reflect.Value

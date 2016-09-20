@@ -16,6 +16,7 @@
   * Reduce / PReduce
   * Each / PEach
   * Some
+  * Every
 
 ## Installation
 ```

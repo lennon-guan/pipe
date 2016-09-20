@@ -422,6 +422,19 @@ func TestSome1(t *testing.T) {
 	}
 }
 
+func TestEvery(t *testing.T) {
+	src := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	lessThen := func(max int) func(int) bool {
+		return func(v int) bool { return v < max }
+	}
+	if NewPipe(src).Every(lessThen(5)) {
+		t.Error("Every(lessThen(5)) shoud be false")
+	}
+	if !NewPipe(src).Every(lessThen(11)) {
+		t.Error("Every(lessThen(11)) shoud be true")
+	}
+}
+
 func longTimeProc(n int) int {
 	if n <= 2 {
 		return 1

@@ -435,6 +435,31 @@ func TestEvery(t *testing.T) {
 	}
 }
 
+func TestRange(t *testing.T) {
+	if dst := Range1(5).ToSlice().([]int); !intSliceEqual(dst, 0, 1, 2, 3, 4) {
+		t.Error("Range1 error", dst)
+	}
+	if dst := Range2(2, 5).ToSlice().([]int); !intSliceEqual(dst, 2, 3, 4) {
+		t.Error("Range2 error", dst)
+	}
+	if dst := Range3(1, 6, 2).ToSlice().([]int); !intSliceEqual(dst, 1, 3, 5) {
+		t.Error("Range3 error", dst)
+	}
+	if dst := Range3(1, 5, 2).ToSlice().([]int); !intSliceEqual(dst, 1, 3) {
+		t.Error("Range3 error", dst)
+	}
+}
+
+func TestRangeMapFilter(t *testing.T) {
+	dst := Range1(10).
+		Map(func(i int) int { return i * 2 }).
+		Filter(func(i int) bool { return i < 10 }).
+		ToSlice().([]int)
+	if !intSliceEqual(dst, 0, 2, 4, 6, 8) {
+		t.Error(dst)
+	}
+}
+
 func longTimeProc(n int) int {
 	if n <= 2 {
 		return 1

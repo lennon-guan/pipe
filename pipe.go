@@ -145,12 +145,30 @@ type _Pipe struct {
 	proc    _IProc
 }
 
+type _Range struct {
+	begin int
+	end   int
+	step  int
+}
+
 func NewPipe(arr interface{}) *_Pipe {
 	return &_Pipe{
 		arr:     arr,
 		srcPipe: nil,
 		proc:    nil,
 	}
+}
+
+func Range1(size int) *_Pipe {
+	return NewPipe(&_Range{0, size, 1})
+}
+
+func Range2(begin, end int) *_Pipe {
+	return NewPipe(&_Range{begin, end, 1})
+}
+
+func Range3(begin, end, step int) *_Pipe {
+	return NewPipe(&_Range{begin, end, step})
 }
 
 func (p *_Pipe) Filter(proc interface{}) *_Pipe {
@@ -177,7 +195,11 @@ func (p *_Pipe) srcLen() int {
 	if pp.arr == nil {
 		panic("no slice")
 	}
-	return reflect.ValueOf(pp.arr).Len()
+	if r, ok := pp.arr.(*_Range); ok {
+		return ((*r).end - (*r).begin) / (*r).step
+	} else {
+		return reflect.ValueOf(pp.arr).Len()
+	}
 }
 
 type _GetValueTask struct {
@@ -251,6 +273,11 @@ func (t *_GetValueTask) StableThen(wait *WaitIndex, fn func(reflect.Value)) {
 func (p *_Pipe) getValue(index int) (task *_GetValueTask) {
 	if p.srcPipe != nil {
 		task = p.srcPipe.getValue(index)
+	} else if r, ok := p.arr.(*_Range); ok {
+		task = &_GetValueTask{
+			srcIndex:   index,
+			startValue: reflect.ValueOf((*r).begin + index*(*r).step),
+		}
 	} else {
 		task = &_GetValueTask{
 			srcIndex:   index,
@@ -272,6 +299,9 @@ func (p *_Pipe) getOutType() reflect.Type {
 	if p.proc != nil {
 		return p.proc.GetOutType()
 	} else if p.arr != nil {
+		if _, ok := p.arr.(*_Range); ok {
+			return reflect.TypeOf(1)
+		}
 		return reflect.TypeOf(p.arr).Elem()
 	} else {
 		panic("both proc and arr are nil")
@@ -280,6 +310,13 @@ func (p *_Pipe) getOutType() reflect.Type {
 
 func (p *_Pipe) ToSlice() interface{} {
 	if p.proc == nil {
+		if r, ok := p.arr.(*_Range); ok {
+			out := make([]int, 0, p.srcLen())
+			for i := (*r).begin; i < (*r).end; i += (*r).step {
+				out = append(out, i)
+			}
+			return out
+		}
 		return p.arr
 	}
 	length := p.srcLen()
@@ -296,7 +333,7 @@ func (p *_Pipe) ToSlice() interface{} {
 
 func (p *_Pipe) PToSlice() interface{} {
 	if p.proc == nil {
-		return p.arr
+		return p.ToSlice()
 	}
 	length := p.srcLen()
 	outElemType := p.getOutType()

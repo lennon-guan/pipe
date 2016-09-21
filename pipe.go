@@ -171,6 +171,19 @@ func Range3(begin, end, step int) *_Pipe {
 	return NewPipe(&_Range{begin, end, step})
 }
 
+func Range(args ...int) *_Pipe {
+	switch len(args) {
+	case 1:
+		return Range1(args[0])
+	case 2:
+		return Range2(args[0], args[1])
+	case 3:
+		return Range3(args[0], args[1], args[2])
+	default:
+		panic("Range only accpet 1 to 3 arguments")
+	}
+}
+
 func (p *_Pipe) Filter(proc interface{}) *_Pipe {
 	return &_Pipe{
 		arr:     nil,

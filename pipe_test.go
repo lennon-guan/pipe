@@ -448,6 +448,18 @@ func TestRange(t *testing.T) {
 	if dst := Range3(1, 5, 2).ToSlice().([]int); !intSliceEqual(dst, 1, 3) {
 		t.Error("Range3 error", dst)
 	}
+	if dst := Range(5).ToSlice().([]int); !intSliceEqual(dst, 0, 1, 2, 3, 4) {
+		t.Error("Range for Range1 error", dst)
+	}
+	if dst := Range(2, 5).ToSlice().([]int); !intSliceEqual(dst, 2, 3, 4) {
+		t.Error("Range for Range2 error", dst)
+	}
+	if dst := Range(1, 6, 2).ToSlice().([]int); !intSliceEqual(dst, 1, 3, 5) {
+		t.Error("Range for Range3 error", dst)
+	}
+	if dst := Range(1, 5, 2).ToSlice().([]int); !intSliceEqual(dst, 1, 3) {
+		t.Error("Range for Range3 error", dst)
+	}
 }
 
 func TestRangeMapFilter(t *testing.T) {

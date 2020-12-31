@@ -171,9 +171,9 @@ func TestToMap(t *testing.T) {
 	src := []int{5, 4, 3, 2, 1}
 	dst := NewPipe(src).
 		ToMap(
-		func(v int) string { return fmt.Sprintf("Key-%d", v) },
-		func(v int) string { return fmt.Sprintf("Val-%d", v) },
-	).(map[string]string)
+			func(v int) string { return fmt.Sprintf("Key-%d", v) },
+			func(v int) string { return fmt.Sprintf("Val-%d", v) },
+		).(map[string]string)
 	if len(dst) != 5 {
 		t.Error("ToMap: to map fail. len not matched", len(dst), 5)
 	}
@@ -186,9 +186,9 @@ func TestToMap(t *testing.T) {
 	}
 	dst = NewPipe(src).
 		PToMap(
-		func(v int) string { return fmt.Sprintf("Key-%d", v) },
-		func(v int) string { return fmt.Sprintf("Val-%d", v) },
-	).(map[string]string)
+			func(v int) string { return fmt.Sprintf("Key-%d", v) },
+			func(v int) string { return fmt.Sprintf("Val-%d", v) },
+		).(map[string]string)
 	if len(dst) != 5 {
 		t.Error("PToMap: to map fail. len not matched", len(dst), 5)
 	}
@@ -205,9 +205,9 @@ func TestToMapNil(t *testing.T) {
 	src := []int{5, 4, 3, 2, 1}
 	dst := NewPipe(src).
 		ToMap(
-		func(v int) string { return fmt.Sprintf("Key-%d", v) },
-		nil,
-	).(map[string]int)
+			func(v int) string { return fmt.Sprintf("Key-%d", v) },
+			nil,
+		).(map[string]int)
 	if len(dst) != 5 {
 		t.Error("to map fail. len not matched")
 	}
@@ -223,8 +223,8 @@ func TestToMap2(t *testing.T) {
 	src := []int{5, 4, 3, 2, 1}
 	dst := NewPipe(src).
 		ToMap2(func(v int) (string, string) {
-		return fmt.Sprintf("Key-%d", v), fmt.Sprintf("Val-%d", v)
-	}).(map[string]string)
+			return fmt.Sprintf("Key-%d", v), fmt.Sprintf("Val-%d", v)
+		}).(map[string]string)
 	if len(dst) != 5 {
 		t.Error("ToMap2: to map fail. len not matched", len(dst), 5)
 	}
@@ -237,8 +237,8 @@ func TestToMap2(t *testing.T) {
 	}
 	dst = NewPipe(src).
 		PToMap2(func(v int) (string, string) {
-		return fmt.Sprintf("Key-%d", v), fmt.Sprintf("Val-%d", v)
-	}).(map[string]string)
+			return fmt.Sprintf("Key-%d", v), fmt.Sprintf("Val-%d", v)
+		}).(map[string]string)
 	if len(dst) != 5 {
 		t.Error("PToMap2: to map fail. len not matched", len(dst), 5)
 	}
@@ -255,15 +255,15 @@ func TestToGroupMap(t *testing.T) {
 	src := []int{5, 4, 3, 2, 1}
 	dst := NewPipe(src).
 		ToGroupMap(
-		func(v int) string {
-			if v%2 != 0 {
-				return "odd"
-			} else {
-				return "even"
-			}
-		},
-		func(v int) int { return v },
-	).(map[string][]int)
+			func(v int) string {
+				if v%2 != 0 {
+					return "odd"
+				} else {
+					return "even"
+				}
+			},
+			func(v int) int { return v },
+		).(map[string][]int)
 	if len(dst) != 2 {
 		t.Error("to groupmap fail. len not matched")
 	}
@@ -275,15 +275,15 @@ func TestToGroupMap(t *testing.T) {
 	}
 	dst = NewPipe(src).
 		PToGroupMap(
-		func(v int) string {
-			if v%2 != 0 {
-				return "odd"
-			} else {
-				return "even"
-			}
-		},
-		func(v int) int { return v },
-	).(map[string][]int)
+			func(v int) string {
+				if v%2 != 0 {
+					return "odd"
+				} else {
+					return "even"
+				}
+			},
+			func(v int) int { return v },
+		).(map[string][]int)
 	if len(dst) != 2 {
 		t.Error("to groupmap fail. len not matched")
 	}
@@ -299,15 +299,15 @@ func TestToGroupMapNil(t *testing.T) {
 	src := []int{5, 4, 3, 2, 1}
 	dst := NewPipe(src).
 		ToGroupMap(
-		func(v int) string {
-			if v%2 != 0 {
-				return "odd"
-			} else {
-				return "even"
-			}
-		},
-		nil,
-	).(map[string][]int)
+			func(v int) string {
+				if v%2 != 0 {
+					return "odd"
+				} else {
+					return "even"
+				}
+			},
+			nil,
+		).(map[string][]int)
 	if len(dst) != 2 {
 		t.Error("to groupmap fail. len not matched")
 	}
@@ -323,14 +323,14 @@ func TestToGroupMap2(t *testing.T) {
 	src := []int{5, 4, 3, 2, 1}
 	dst := NewPipe(src).
 		ToGroupMap2(
-		func(v int) (string, int) {
-			if v%2 != 0 {
-				return "odd", v
-			} else {
-				return "even", v
-			}
-		},
-	).(map[string][]int)
+			func(v int) (string, int) {
+				if v%2 != 0 {
+					return "odd", v
+				} else {
+					return "even", v
+				}
+			},
+		).(map[string][]int)
 	if len(dst) != 2 {
 		t.Error("to groupmap fail. len not matched")
 	}
@@ -342,14 +342,14 @@ func TestToGroupMap2(t *testing.T) {
 	}
 	dst = NewPipe(src).
 		PToGroupMap2(
-		func(v int) (string, int) {
-			if v%2 != 0 {
-				return "odd", v
-			} else {
-				return "even", v
-			}
-		},
-	).(map[string][]int)
+			func(v int) (string, int) {
+				if v%2 != 0 {
+					return "odd", v
+				} else {
+					return "even", v
+				}
+			},
+		).(map[string][]int)
 	if len(dst) != 2 {
 		t.Error("to groupmap fail. len not matched")
 	}
